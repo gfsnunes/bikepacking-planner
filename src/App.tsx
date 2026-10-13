@@ -9,6 +9,7 @@ import { MapView } from './ui/MapView';
 import { WaypointEditor } from './ui/WaypointEditor';
 import { WaypointManager } from './ui/WaypointManager';
 import { About } from './ui/About';
+import { Welcome } from './ui/Welcome';
 import { WAYPOINT_FILE_ACCEPT, importWaypointsFromFile } from './ui/importFlow';
 
 type EleState =
@@ -99,6 +100,7 @@ export default function App() {
       <header>
         <h1>Bikepacking Day Planner</h1>
         {name && <span className="route-name">{name}</span>}
+        <Welcome onSample={loadSample} onOpenGpx={() => fileInput.current?.click()} />
         <About />
         <div className="spacer" />
         <input

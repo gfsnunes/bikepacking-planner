@@ -255,3 +255,11 @@ dialog.about h2 { margin: 0 0 8px; font-size: 16px; }
 dialog.about h3 { margin: 14px 0 4px; font-size: 13px; }
 dialog.about ul { margin: 0; padding-left: 18px; }
 dialog.about > button { margin-top: 14px; }
+
+/* Quick guide */
+dialog.welcome { max-width: min(520px, calc(100vw - 32px)); }
+.welcome .steps { margin: 6px 0 10px; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+.welcome .steps li::marker { color: var(--accent); font-weight: 700; }
+.welcome-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+.welcome-actions .link { margin-left: auto; }
+button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 600; }

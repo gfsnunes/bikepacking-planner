@@ -22,14 +22,27 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      CF_TOKEN_RAW: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ACCOUNT_RAW: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - name: Check Cloudflare secrets are set
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # Secrets pasted via a terminal often carry a trailing newline, which makes the
+      # Authorization header invalid. Tokens never contain whitespace, so strip it.
+      # The diagnostics print lengths and character classes only, never the values.
+      - name: Check Cloudflare secrets
         run: |
-          [ -n "$CLOUDFLARE_API_TOKEN" ] || { echo "::error::Secret CLOUDFLARE_API_TOKEN is missing or empty"; exit 1; }
-          [ -n "$CLOUDFLARE_ACCOUNT_ID" ] || { echo "::error::Secret CLOUDFLARE_ACCOUNT_ID is missing or empty"; exit 1; }
+          token="$(printf '%s' "$CF_TOKEN_RAW" | tr -d '[:space:]')"
+          account="$(printf '%s' "$CF_ACCOUNT_RAW" | tr -d '[:space:]')"
+          echo "API token: ${#CF_TOKEN_RAW} chars as stored, ${#token} after trimming whitespace"
+          echo "Account ID: ${#CF_ACCOUNT_RAW} chars as stored, ${#account} after trimming whitespace"
+          [ -n "$token" ] || { echo "::error::Secret CLOUDFLARE_API_TOKEN is missing or empty"; exit 1; }
+          [ -n "$account" ] || { echo "::error::Secret CLOUDFLARE_ACCOUNT_ID is missing or empty"; exit 1; }
+          case "$token" in
+            *Bearer*|*curl*|*Authorization*|*http*) echo "::error::CLOUDFLARE_API_TOKEN looks like a whole command, not just the token"; exit 1 ;;
+          esac
+          printf '%s' "$token" | grep -qE '^[A-Za-z0-9_-]+$' || { echo "::error::CLOUDFLARE_API_TOKEN contains characters a Cloudflare token never has"; exit 1; }
+          printf '%s' "$account" | grep -qE '^[0-9a-f]{32}$' || { echo "::error::CLOUDFLARE_ACCOUNT_ID is not a 32-character hex account ID"; exit 1; }
+          echo "Secrets look well-formed"
 
       - uses: actions/checkout@v6
 
@@ -43,10 +56,9 @@ jobs:
       - run: npm run build
 
       - name: Create the Pages project on first run
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
+          export CLOUDFLARE_API_TOKEN="$(printf '%s' "$CF_TOKEN_RAW" | tr -d '[:space:]')"
+          export CLOUDFLARE_ACCOUNT_ID="$(printf '%s' "$CF_ACCOUNT_RAW" | tr -d '[:space:]')"
           if npx wrangler pages project list | grep -qw "$PROJECT"; then
             echo "Project $PROJECT exists"
           else
@@ -54,7 +66,7 @@ jobs:
           fi
 
       - name: Deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler pages deploy dist --project-name="$PROJECT" --branch=main --commit-dirty=true
+        run: |
+          export CLOUDFLARE_API_TOKEN="$(printf '%s' "$CF_TOKEN_RAW" | tr -d '[:space:]')"
+          export CLOUDFLARE_ACCOUNT_ID="$(printf '%s' "$CF_ACCOUNT_RAW" | tr -d '[:space:]')"
+          npx wrangler pages deploy dist --project-name="$PROJECT" --branch=main --commit-dirty=true

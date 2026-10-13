@@ -17,8 +17,10 @@ There is no backend: routes, waypoints and settings stay in the user's browser (
 
 ## Deploy
 
-A static site: `npm run build` produces `dist/`. Hosted on Cloudflare Pages, connected to this repo
-(build command `npm run build`, output directory `dist`, Node version from `.nvmrc`).
+A static site: `npm run build` produces `dist/`. Hosted on Cloudflare Pages and deployed by GitHub
+Actions (`.github/workflows/deploy.yml`): every push to `main` runs the tests, builds and runs
+`wrangler pages deploy`. The workflow needs two repository secrets: `CLOUDFLARE_API_TOKEN` (a token
+with Account → Cloudflare Pages → Edit) and `CLOUDFLARE_ACCOUNT_ID`. Node version comes from `.nvmrc`.
 `public/_headers` sets the security headers (Content-Security-Policy and others). If you add a
 new external service, add its host to the CSP there.
 

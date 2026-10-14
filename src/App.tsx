@@ -12,6 +12,16 @@ import { About } from './ui/About';
 import { Welcome } from './ui/Welcome';
 import { WAYPOINT_FILE_ACCEPT, importWaypointsFromFile } from './ui/importFlow';
 
+// Set once the visitor has opened a route of their own; hides the "Open GPX" pointer for good.
+const GPX_OPENED_KEY = 'bikepacking-planner:gpx-opened';
+function gpxOpenedBefore(): boolean {
+  try {
+    return localStorage.getItem(GPX_OPENED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 type EleState =
   | { kind: 'idle' }
   | { kind: 'loading'; done: number; total: number; waitS?: number }
@@ -28,13 +38,14 @@ export default function App() {
   const [ele, setEle] = useState<EleState>({ kind: 'idle' });
   const [dragOver, setDragOver] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const [gpxOpened, setGpxOpened] = useState(gpxOpenedBefore);
 
   useEffect(() => {
     restoreLastTrip();
   }, []);
 
   /** A GPX with a track or route opens as the route; anything else is a waypoint import. */
-  async function openFile(file: File) {
+  async function openFile(file: File, isSample = false) {
     setError(null);
     const isGpx = /\.gpx$/i.test(file.name);
     const text = isGpx ? await file.text() : '';
@@ -46,6 +57,14 @@ export default function App() {
       const g = parseGpx(text);
       useStore.getState().loadTrack(g.name, g.points, g.waypoints);
       setEle({ kind: 'idle' });
+      if (!isSample && !gpxOpened) {
+        setGpxOpened(true);
+        try {
+          localStorage.setItem(GPX_OPENED_KEY, '1');
+        } catch {
+          /* storage unavailable: the pointer just comes back next visit */
+        }
+      }
     } catch (e) {
       setError(`${file.name}: ${(e as Error).message}`);
     }
@@ -53,7 +72,7 @@ export default function App() {
 
   async function loadSample() {
     const res = await fetch(`${import.meta.env.BASE_URL}sample.gpx`);
-    await openFile(new File([await res.text()], 'sample.gpx'));
+    await openFile(new File([await res.text()], 'sample.gpx'), true);
   }
 
   async function fetchElevation() {
@@ -114,7 +133,17 @@ export default function App() {
             e.target.value = '';
           }}
         />
-        <button onClick={() => fileInput.current?.click()}>{points.length ? 'Open another GPX' : 'Open GPX'}</button>
+        <span className="gpx-btn-wrap">
+          <button onClick={() => fileInput.current?.click()}>{points.length ? 'Open another GPX' : 'Open GPX'}</button>
+          {!gpxOpened && (
+            <span className="gpx-hint" aria-hidden="true">
+              <svg className="gpx-hint-arrow" viewBox="0 0 24 24" width="26" height="26">
+                <path d="M12 21V4M5 10l7-7 7 7" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span className="gpx-hint-text">Start here: open your GPX route</span>
+            </span>
+          )}
+        </span>
         <input
           ref={wpInput}
           type="file"

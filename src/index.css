@@ -263,3 +263,32 @@ dialog.welcome { max-width: min(520px, calc(100vw - 32px)); }
 .welcome-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
 .welcome-actions .link { margin-left: auto; }
 button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 600; }
+
+/* "Open GPX" pointer, shown until the visitor opens a route of their own */
+.gpx-btn-wrap { position: relative; display: inline-flex; }
+.gpx-hint {
+  position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%); z-index: 20;
+  display: flex; flex-direction: column; align-items: center; pointer-events: none; color: var(--accent);
+  animation: gpx-hint-bounce 1.1s ease-in-out infinite;
+}
+.gpx-hint-arrow { filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25)); }
+.gpx-hint-text {
+  margin-top: 2px; white-space: nowrap; font-size: 12px; font-weight: 600; color: var(--accent-fg);
+  background: var(--accent); border-radius: 6px; padding: 3px 8px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+@keyframes gpx-hint-bounce {
+  0%, 100% { transform: translate(-50%, 0); }
+  50% { transform: translate(-50%, 8px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gpx-hint { animation: none; }
+}
+@media (max-width: 760px) {
+  /* The header wraps on phones; anchor the label to the button's left edge so it can't run off-screen. */
+  .gpx-hint { left: 0; transform: none; align-items: flex-start; animation-name: gpx-hint-bounce-left; }
+  .gpx-hint-arrow { margin-left: 20px; }
+}
+@keyframes gpx-hint-bounce-left {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(8px); }
+}

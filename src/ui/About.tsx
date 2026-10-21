@@ -29,6 +29,10 @@ export function About() {
             <strong>Elevation lookup</strong> sends your track's coordinates to Open-Meteo, only when you click “Look up elevation” for a
             route without elevation data.
           </li>
+          <li>
+            <strong>Visit counts</strong> come from Cloudflare Web Analytics, which counts page views without cookies or local storage. Your
+            routes and waypoints are not sent.
+          </li>
         </ul>
         <h3>Data and credits</h3>
         <ul>

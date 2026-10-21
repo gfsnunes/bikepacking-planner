@@ -60,7 +60,8 @@ export function Welcome({ onSample, onOpenGpx }: { onSample: () => void; onOpenG
         <p>Plan a multi-day ride in a few minutes:</p>
         <ol className="steps">
           <li>
-            <strong>Open a GPX route</strong>, or try the sample route. Drag-and-drop onto the page works too.
+            <strong>Open a GPX route</strong>, or try the sample route. Drag-and-drop onto the page works too. Use <em>Crop route</em> to
+            trim either end and <em>Reverse</em> to ride it the other way.
           </li>
           <li>
             <strong>Set your daily limits</strong> in the <em>Daily limits</em> panel: distance, climbing or riding time. Each day ends at whichever limit

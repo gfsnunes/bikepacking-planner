@@ -9,6 +9,7 @@ import type { SyncStatus } from './sync/client';
 import { DEFAULT_TIME_MODEL, buildProfile } from './core/metrics';
 import { pinsAfterDrag, projectWaypoints, splitDays, type ProjectedWaypoint, type ProjectionCache } from './core/splitter';
 import { dayStats } from './core/stats';
+import { cropPins, cropTrack, reverseTrack } from './core/trim';
 import { sanitizeWaypoint, safeType, type Day, type DayStats, type Limits, type Profile, type SnapSettings, type TimeModel, type TrackPoint, type Waypoint } from './core/types';
 
 interface Inputs {
@@ -58,6 +59,8 @@ interface Ui {
   libraryOpen: boolean; // OpenStreetMap waypoint library dialog
   share: ShareState | null; // the open shared trip, if any
   shareOpen: boolean; // Save & share dialog
+  cropOpen: boolean; // Crop route dialog
+  lastTrack: { points: TrackPoint[]; pinned: number[]; label: 'crop' | 'reverse' } | null; // for Undo (memory only)
 }
 
 interface Actions {
@@ -96,6 +99,10 @@ interface Actions {
   applyShared(patch: Partial<Inputs>): void;
   setShare(s: ShareState | null): void;
   setShareOpen(open: boolean): void;
+  setCropOpen(open: boolean): void;
+  cropTo(a: number, b: number): void;
+  reverseRoute(): void;
+  undoTrackEdit(): void;
 }
 
 export type State = Inputs & Derived & Ui & Actions;
@@ -165,9 +172,11 @@ export const useStore = create<State>()((setState, getState) => {
     libraryOpen: false,
     share: null,
     shareOpen: false,
+    cropOpen: false,
+    lastTrack: null,
 
     loadTrack: (name, points, waypoints) => {
-      setState({ selectedDay: null });
+      setState({ selectedDay: null, lastTrack: null });
       update({ name, points, waypoints: waypoints.map(sanitizeWaypoint), pinned: [] }, true);
     },
     replacePoints: (points) => update({ points }, true),
@@ -251,6 +260,27 @@ export const useStore = create<State>()((setState, getState) => {
     applyShared: (patch) => update(patch, 'points' in patch || 'timeModel' in patch || 'hike' in patch, true),
     setShare: (share) => setState({ share }),
     setShareOpen: (shareOpen) => setState({ shareOpen }),
+    setCropOpen: (cropOpen) => setState({ cropOpen }),
+    cropTo: (a, b) => {
+      const { points, pinned } = getState();
+      update({ points: cropTrack(points, a, b), pinned: cropPins(pinned, a, b) }, true);
+      if (getState().points === points) return; // refused (view-only link)
+      setState({ lastTrack: { points, pinned, label: 'crop' }, selectedDay: null, selection: null, hover: null });
+    },
+    reverseRoute: () => {
+      const { points, pinned } = getState();
+      update({ points: reverseTrack(points), pinned: [] }, true);
+      if (getState().points === points) return;
+      setState({ lastTrack: { points, pinned, label: 'reverse' }, selectedDay: null, selection: null, hover: null });
+      if (pinned.length) setState({ notice: { text: 'Route reversed. Day ends you placed by hand were reset.', kind: 'info' } });
+    },
+    undoTrackEdit: () => {
+      const last = getState().lastTrack;
+      if (!last) return;
+      const before = getState().points;
+      update({ points: last.points, pinned: last.pinned }, true);
+      if (getState().points !== before) setState({ lastTrack: null, selectedDay: null, selection: null, hover: null });
+    },
   };
 });
 

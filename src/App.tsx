@@ -6,6 +6,7 @@ import { restoreLastTrip, useStore } from './store';
 import { parseLink } from './sync/crypto';
 import { joinShare, leaveShare, savedShare } from './sync/session';
 import { ShareButton, ShareDialog } from './ui/ShareDialog';
+import { CropDialog } from './ui/CropDialog';
 import { DayStrip, Settings, TripSummary } from './ui/DayPanel';
 import { ElevationProfile } from './ui/ElevationProfile';
 import { MapView } from './ui/MapView';
@@ -62,6 +63,7 @@ export default function App() {
   const adding = useStore((s) => s.addingWaypoint);
   const notice = useStore((s) => s.notice);
   const readOnly = useStore((s) => !!s.share && !s.share.canWrite);
+  const lastTrack = useStore((s) => s.lastTrack);
   const wpInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [ele, setEle] = useState<EleState>({ kind: 'idle' });
@@ -197,6 +199,15 @@ export default function App() {
                 {adding ? 'Click the map…' : 'Add waypoint'}
               </button>
             )}
+            {!readOnly && <button onClick={() => useStore.getState().setCropOpen(true)}>Crop route</button>}
+            {!readOnly && (
+              <button onClick={() => useStore.getState().reverseRoute()} title="Ride the route the other way round">
+                Reverse
+              </button>
+            )}
+            {!readOnly && lastTrack && (
+              <button onClick={() => useStore.getState().undoTrackEdit()}>Undo {lastTrack.label}</button>
+            )}
             <ShareButton />
             <button onClick={exportOne}>Export GPX</button>
             <button onClick={exportZip}>Export per day (.zip)</button>
@@ -273,6 +284,7 @@ export default function App() {
       </main>
       <LibraryDialog />
       <ShareDialog />
+      <CropDialog />
     </div>
   );
 }

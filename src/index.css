@@ -325,3 +325,15 @@ dialog.library { max-width: min(620px, calc(100vw - 32px)); width: 620px; }
 .settings .calc { margin: 6px 0; font-size: 13px; }
 .water-head { margin-top: 8px; }
 @media (prefers-color-scheme: dark) { .resupply-gap { color: #ff7b7b; } }
+
+/* Save & share */
+fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
+dialog.share { width: 560px; }
+.share-link { margin: 10px 0; }
+.share-link label { display: flex; flex-direction: column; gap: 4px; }
+.share-link-row { display: flex; gap: 6px; }
+.share-link-row input { flex: 1; min-width: 0; font-family: ui-monospace, monospace; font-size: 12px; }
+button.danger { color: #b42318; border-color: #f2b8b5; }
+.share-pill { display: inline-flex; align-items: center; gap: 6px; }
+.share-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: #2e9e5b; }
+.share-pill.connecting .dot, .share-pill.offline .dot { background: #d98c00; }

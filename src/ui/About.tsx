@@ -11,13 +11,21 @@ export function About() {
       <dialog ref={dialog} className="about" onClick={(e) => e.target === dialog.current && dialog.current?.close()}>
         <h2>About &amp; privacy</h2>
         <p>
-          Bikepacking Day Planner is a free, non-commercial project. It runs entirely in your browser: there is no account and no server
-          that stores your data.
+          Bikepacking Day Planner is a free, non-commercial project. It runs in your browser: there is no account, and nothing you plan
+          leaves your device unless you share a trip.
         </p>
         <h3>What stays on your device</h3>
         <p>
           The routes, waypoints and settings you open are kept only in this browser (its local storage), so your plan is still here next
           time. Clearing the site's data removes them. Exports are files you save yourself.
+        </p>
+        <h3>Shared trips</h3>
+        <p>
+          “Save &amp; share” uploads the trip to our sharing server so others can plan it with you. It is encrypted in your browser first:
+          the key is part of the link (after the #, which browsers never send to a server), so the server stores only data it can’t read.
+          It does see when a shared trip is opened and how much data it holds. A shared trip is deleted 90 days after its last change, or
+          straight away with “Delete shared trip”. Anyone with the edit link can change or delete it; nobody can recover a trip whose
+          link is lost.
         </p>
         <h3>What other services see</h3>
         <ul>

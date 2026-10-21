@@ -4,6 +4,8 @@ import { guessType } from './core/gpx';
 import { DEFAULT_HIKE, type HikeSettings } from './core/hike';
 import { DEFAULT_RESUPPLY, planFood, planWater, type ResupplyPlan, type ResupplySettings } from './core/resupply';
 import type { Runs } from './core/viewport';
+import type { ShareKeys } from './sync/crypto';
+import type { SyncStatus } from './sync/client';
 import { DEFAULT_TIME_MODEL, buildProfile } from './core/metrics';
 import { pinsAfterDrag, projectWaypoints, splitDays, type ProjectedWaypoint, type ProjectionCache } from './core/splitter';
 import { dayStats } from './core/stats';
@@ -31,6 +33,13 @@ interface Derived {
   waterPlan: ResupplyPlan | null;
 }
 
+export interface ShareState {
+  keys: ShareKeys;
+  status: SyncStatus;
+  canWrite: boolean; // false for a view-only link, and while (re)joining
+  peers: number; // browsers with the trip open, this one included
+}
+
 interface Ui {
   hover: number | null; // hovered track point index
   hoverSource: 'map' | 'profile' | null;
@@ -47,6 +56,8 @@ interface Ui {
   lastDeleted: Waypoint[] | null; // for undo
   notice: { text: string; kind: 'info' | 'error' } | null;
   libraryOpen: boolean; // OpenStreetMap waypoint library dialog
+  share: ShareState | null; // the open shared trip, if any
+  shareOpen: boolean; // Save & share dialog
 }
 
 interface Actions {
@@ -81,6 +92,10 @@ interface Actions {
   focus(k: number): void;
   toggleDay(k: number): void;
   clearSelectedDay(): void;
+  /** Changes that came from the shared trip (bypasses the read-only guard). */
+  applyShared(patch: Partial<Inputs>): void;
+  setShare(s: ShareState | null): void;
+  setShareOpen(open: boolean): void;
 }
 
 export type State = Inputs & Derived & Ui & Actions;
@@ -110,7 +125,12 @@ function derive(s: Inputs, prev?: Derived, rebuildProfile = true): Derived {
 }
 
 export const useStore = create<State>()((setState, getState) => {
-  const update = (patch: Partial<Inputs>, rebuildProfile = false) => {
+  const update = (patch: Partial<Inputs>, rebuildProfile = false, remote = false) => {
+    // A view-only shared trip: only per-viewer settings may change here.
+    if (!remote && getState().share && !getState().share!.canWrite) {
+      if (!('cardRangeKm' in patch)) return;
+      patch = { cardRangeKm: patch.cardRangeKm };
+    }
     const next = { ...getState(), ...patch };
     setState({ ...patch, ...derive(next, getState(), rebuildProfile) });
     const { selectedDay, days } = getState();
@@ -143,6 +163,8 @@ export const useStore = create<State>()((setState, getState) => {
     lastDeleted: null,
     notice: null,
     libraryOpen: false,
+    share: null,
+    shareOpen: false,
 
     loadTrack: (name, points, waypoints) => {
       setState({ selectedDay: null });
@@ -226,6 +248,9 @@ export const useStore = create<State>()((setState, getState) => {
     toggleDay: (k) =>
       setState(getState().selectedDay === k ? { selectedDay: null } : { selectedDay: k, focusDay: { k, nonce: Date.now() } }),
     clearSelectedDay: () => setState({ selectedDay: null }),
+    applyShared: (patch) => update(patch, 'points' in patch || 'timeModel' in patch || 'hike' in patch, true),
+    setShare: (share) => setState({ share }),
+    setShareOpen: (shareOpen) => setState({ shareOpen }),
   };
 });
 

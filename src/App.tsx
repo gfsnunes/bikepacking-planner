@@ -3,6 +3,9 @@ import { fillElevation, needsElevation } from './core/elevation-fill';
 import { download, exportCombined, exportPerDay, slug } from './core/export';
 import { parseGpx } from './core/gpx';
 import { restoreLastTrip, useStore } from './store';
+import { parseLink } from './sync/crypto';
+import { joinShare, leaveShare, savedShare } from './sync/session';
+import { ShareButton, ShareDialog } from './ui/ShareDialog';
 import { DayStrip, Settings, TripSummary } from './ui/DayPanel';
 import { ElevationProfile } from './ui/ElevationProfile';
 import { MapView } from './ui/MapView';
@@ -23,6 +26,30 @@ function gpxOpenedBefore(): boolean {
   }
 }
 
+let shareStarted = false; // StrictMode runs effects twice in development
+
+/** Open a shared trip from the link in the address bar, or reconnect to the one open before a reload. */
+async function startShare() {
+  if (shareStarted) return;
+  shareStarted = true;
+  await restoreLastTrip();
+  const link = parseLink(location.hash);
+  const saved = savedShare();
+  if (!link) {
+    if (saved) joinShare(saved);
+    return;
+  }
+  // Take the secrets out of the address bar (screenshots, screen sharing); the dialog still shows the links.
+  history.replaceState(null, '', location.pathname + location.search);
+  const sameTrip = saved?.roomId === link.roomId;
+  const hasOther = useStore.getState().points.length > 0 && !sameTrip;
+  if (hasOther && !confirm('Open the shared trip? It replaces the trip open here. Export that one first if you want to keep it.')) {
+    if (saved) joinShare(saved);
+    return;
+  }
+  joinShare(sameTrip && !link.writeToken && saved?.writeToken ? saved : link);
+}
+
 type EleState =
   | { kind: 'idle' }
   | { kind: 'loading'; done: number; total: number; waitS?: number }
@@ -34,6 +61,7 @@ export default function App() {
   const hasEle = useStore((s) => s.profile?.hasElevation ?? false);
   const adding = useStore((s) => s.addingWaypoint);
   const notice = useStore((s) => s.notice);
+  const readOnly = useStore((s) => !!s.share && !s.share.canWrite);
   const wpInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [ele, setEle] = useState<EleState>({ kind: 'idle' });
@@ -42,7 +70,7 @@ export default function App() {
   const [gpxOpened, setGpxOpened] = useState(gpxOpenedBefore);
 
   useEffect(() => {
-    restoreLastTrip();
+    void startShare();
   }, []);
 
   /** A GPX with a track or route opens as the route; anything else is a waypoint import. */
@@ -56,6 +84,10 @@ export default function App() {
     }
     try {
       const g = parseGpx(text);
+      if (useStore.getState().share) {
+        leaveShare();
+        useStore.getState().setNotice({ text: 'You left the shared trip to open this route. The shared trip stays online.', kind: 'info' });
+      }
       useStore.getState().loadTrack(g.name, g.points, g.waypoints);
       setEle({ kind: 'idle' });
       if (!isSample && !gpxOpened) {
@@ -156,13 +188,16 @@ export default function App() {
             e.target.value = '';
           }}
         />
-        <button onClick={() => wpInput.current?.click()}>Import waypoints</button>
-        {points.length > 0 && <button onClick={() => useStore.getState().setLibraryOpen(true)}>Waypoint library</button>}
+        {!readOnly && <button onClick={() => wpInput.current?.click()}>Import waypoints</button>}
+        {points.length > 0 && !readOnly && <button onClick={() => useStore.getState().setLibraryOpen(true)}>Waypoint library</button>}
         {points.length > 0 && (
           <>
-            <button className={adding ? 'active' : ''} onClick={() => useStore.getState().setAddingWaypoint(!adding)}>
-              {adding ? 'Click the map…' : 'Add waypoint'}
-            </button>
+            {!readOnly && (
+              <button className={adding ? 'active' : ''} onClick={() => useStore.getState().setAddingWaypoint(!adding)}>
+                {adding ? 'Click the map…' : 'Add waypoint'}
+              </button>
+            )}
+            <ShareButton />
             <button onClick={exportOne}>Export GPX</button>
             <button onClick={exportZip}>Export per day (.zip)</button>
           </>
@@ -204,8 +239,9 @@ export default function App() {
                   <strong>Drop a GPX file here</strong> or use <em>Open GPX</em>.
                 </p>
                 <p className="hint privacy">
-                  Your routes and waypoints stay in this browser; nothing is uploaded. The map tile provider sees which areas you view,
-                  and the optional elevation lookup sends a track's coordinates to Open-Meteo.
+                  Your routes and waypoints stay in this browser unless you share a trip, and shared trips are end-to-end encrypted.
+                  The map tile provider sees which areas you view, and the optional elevation lookup sends a track's coordinates to
+                  Open-Meteo.
                 </p>
                 <p>
                   <button className="sample" onClick={loadSample}>
@@ -217,8 +253,10 @@ export default function App() {
           </div>
           {points.length > 0 && (
             <aside>
-              <WaypointEditor />
-              <Settings />
+              <fieldset className="plain" disabled={readOnly}>
+                <WaypointEditor />
+                <Settings />
+              </fieldset>
             </aside>
           )}
         </div>
@@ -227,11 +265,14 @@ export default function App() {
             <ElevationProfile />
             <TripSummary />
             <DayStrip />
-            <WaypointManager />
+            <fieldset className="plain" disabled={readOnly}>
+              <WaypointManager />
+            </fieldset>
           </>
         )}
       </main>
       <LibraryDialog />
+      <ShareDialog />
     </div>
   );
 }

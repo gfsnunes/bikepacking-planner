@@ -1,0 +1,63 @@
+# Deploy the shared-trip sync server (sync-worker/) to Cloudflare Workers.
+# Uses the same repository secrets as deploy.yml; the API token needs Account > Workers Scripts > Edit
+# in addition to Cloudflare Pages > Edit.
+name: Deploy sync server
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'sync-worker/**'
+      - 'src/sync/protocol.ts'
+      - 'src/sync/crypto.ts'
+      - '.github/workflows/sync-worker.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-worker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CF_TOKEN_RAW: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ACCOUNT_RAW: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      IP_SALT_RAW: ${{ secrets.SYNC_IP_SALT }}
+    steps:
+      - name: Check secrets
+        run: |
+          token="$(printf '%s' "$CF_TOKEN_RAW" | tr -d '[:space:]')"
+          account="$(printf '%s' "$CF_ACCOUNT_RAW" | tr -d '[:space:]')"
+          printf '%s' "$token" | grep -qE '^[A-Za-z0-9_-]+$' || { echo "::error::CLOUDFLARE_API_TOKEN is missing or malformed"; exit 1; }
+          printf '%s' "$account" | grep -qE '^[0-9a-f]{32}$' || { echo "::error::CLOUDFLARE_ACCOUNT_ID is missing or malformed"; exit 1; }
+
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npx tsc -p sync-worker/tsconfig.json
+
+      - name: Deploy
+        run: |
+          export CLOUDFLARE_API_TOKEN="$(printf '%s' "$CF_TOKEN_RAW" | tr -d '[:space:]')"
+          export CLOUDFLARE_ACCOUNT_ID="$(printf '%s' "$CF_ACCOUNT_RAW" | tr -d '[:space:]')"
+          npx wrangler deploy --config sync-worker/wrangler.jsonc
+
+      # The salt makes the stored rate-limit keys unlinkable to IP addresses. Set once from a random
+      # repository secret if present; skipped otherwise (the limiter then hashes IPs unsalted).
+      - name: Set the IP salt
+        if: env.IP_SALT_RAW != ''
+        run: |
+          export CLOUDFLARE_API_TOKEN="$(printf '%s' "$CF_TOKEN_RAW" | tr -d '[:space:]')"
+          export CLOUDFLARE_ACCOUNT_ID="$(printf '%s' "$CF_ACCOUNT_RAW" | tr -d '[:space:]')"
+          printf '%s' "$IP_SALT_RAW" | npx wrangler secret put IP_SALT --config sync-worker/wrangler.jsonc

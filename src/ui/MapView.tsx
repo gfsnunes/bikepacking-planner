@@ -252,6 +252,7 @@ export function MapView() {
 
   const points = useStore((s) => s.points);
   const days = useStore((s) => s.days);
+  const readOnly = useStore((s) => !!s.share && !s.share.canWrite);
   const waypoints = useStore((s) => s.waypoints);
   const selectedWaypoint = useStore((s) => s.selectedWaypoint);
   const hover = useStore((s) => s.hover);
@@ -336,7 +337,8 @@ export function MapView() {
     });
     map.on('mousedown', 'wp-icons', (e) => {
       const id = wpId(e);
-      if (!id || e.originalEvent.button !== 0 || useStore.getState().addingWaypoint) return;
+      const st = useStore.getState();
+      if (!id || e.originalEvent.button !== 0 || st.addingWaypoint || (st.share && !st.share.canWrite)) return;
       e.preventDefault(); // stop the map panning
       wpDrag.current = { id, lngLat: null };
       map.getCanvas().style.cursor = 'grabbing';
@@ -493,8 +495,9 @@ export function MapView() {
       el.classList.toggle('pinned', d.pinned);
       el.title = `End of day ${k + 1}${d.pinned ? ' (placed by hand)' : ''}${d.snappedTo ? ` - at ${d.snappedTo}` : ''}`;
       if (dragging.current !== k) m.setLngLat([points[d.end].lon, points[d.end].lat]);
+      m.setDraggable(!readOnly);
     });
-  }, [days, points, ready]);
+  }, [days, points, ready, readOnly]);
 
   // Waypoints into the clustered source.
   useEffect(() => {

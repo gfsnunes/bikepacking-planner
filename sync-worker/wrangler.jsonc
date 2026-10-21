@@ -1,0 +1,19 @@
+// Sync server for shared trips: one Durable Object per trip, relaying and storing ciphertext only.
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "bikepacking-sync",
+  "main": "src/index.ts",
+  // 2026-02-24 or later: storage.deleteAll() also removes the alarm.
+  "compatibility_date": "2026-09-01",
+  "durable_objects": {
+    "bindings": [
+      { "name": "ROOMS", "class_name": "TripRoom" },
+      { "name": "LIMITER", "class_name": "Limiter" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TripRoom", "Limiter"] }],
+  "vars": {
+    // Local development overrides this with --var (see .claude/launch.json in the planning folder).
+    "ALLOWED_ORIGINS": "https://bikepacking-planner.pages.dev"
+  }
+}

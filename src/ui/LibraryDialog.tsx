@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { LIBRARY_CATEGORIES, OverpassBusyError, searchLibrary, type LibraryItem } from '../core/osm-library';
+import { findPlaces, type LibraryResult } from '../core/library-source';
+import { LIBRARY_CATEGORIES, OverpassBusyError, type LibraryItem } from '../core/osm-library';
 import { projectWaypoints } from '../core/splitter';
 import { mergeWaypoints } from '../core/waypoint-import';
 import { useStore } from '../store';
@@ -13,7 +14,7 @@ type Status =
   | { kind: 'idle' }
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
-  | { kind: 'done'; items: (LibraryItem & { km: number; offKm: number })[] };
+  | { kind: 'done'; items: (LibraryItem & { km: number; offKm: number })[]; source: LibraryResult['source']; built?: string };
 
 const fmtOff = (km: number) => (km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`);
 
@@ -75,12 +76,12 @@ export function LibraryDialog() {
     setStatus({ kind: 'loading' });
     try {
       const radiusM = radiusKm * 1000;
-      const found = await searchLibrary(points, radiusM, cats, ctrl.signal);
+      const found = await findPlaces(points, radiusM, cats, ctrl.signal);
       // Position along the route; drop anything outside the radius from the real (unsimplified) track.
-      const items = projectWaypoints(points, found)
+      const items = projectWaypoints(points, found.items)
         .filter((w) => w.offsetM <= radiusM)
         .map((w) => ({ ...w, km: profile.dist[w.idx] / 1000, offKm: w.offsetM / 1000 }));
-      setStatus({ kind: 'done', items });
+      setStatus({ kind: 'done', items, source: found.source, built: found.built });
       setPicked(new Set(items.filter((i) => !have.has(i.id)).map((i) => i.id)));
       setShow(null);
     } catch (e) {
@@ -176,11 +177,16 @@ export function LibraryDialog() {
             </button>
           </div>
 
-          {status.kind === 'loading' && <p className="hint">Asking OpenStreetMap. Long routes can take up to a minute.</p>}
+          {status.kind === 'loading' && <p className="hint">Looking up places along your route…</p>}
           {status.kind === 'error' && <p className="error-text">{status.message}</p>}
 
           {status.kind === 'done' && (
             <>
+              <p className="hint">
+                {status.source === 'tiles'
+                  ? `From the built-in library (OpenStreetMap data as of ${status.built}).`
+                  : 'Searched live on OpenStreetMap: your route is outside the built-in library (currently the Nordics).'}
+              </p>
               <div className="lib-summary">
                 <button className={`chip ${show === null ? 'active' : ''}`} onClick={() => setShow(null)}>
                   All ({items.length})
@@ -242,7 +248,7 @@ export function LibraryDialog() {
       )}
 
       <p className="hint lib-credit">
-        Data © OpenStreetMap contributors, available under the Open Database License (ODbL). Searched via the public Overpass API.
+        Data © OpenStreetMap contributors, available under the Open Database License (ODbL). Built-in library from Geofabrik extracts; other areas searched via the public Overpass API.
       </p>
       <div className="welcome-actions">
         {status.kind === 'done' && (

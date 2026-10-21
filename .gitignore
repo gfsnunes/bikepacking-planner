@@ -26,3 +26,7 @@ dist-ssr
 # Local tooling
 .claude/
 .wrangler/
+
+# Waypoint library pipeline output
+data-out/
+data-work/

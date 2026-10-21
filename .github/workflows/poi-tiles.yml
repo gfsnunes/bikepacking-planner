@@ -1,0 +1,71 @@
+# Build the pre-built waypoint library (OpenStreetMap places, 1°×1° tiles) and publish it as a
+# separate Cloudflare Pages site that the app reads from. Monthly, and on demand.
+# Uses the same repository secrets as deploy.yml (the token's "Cloudflare Pages: Edit" covers both projects).
+name: Build waypoint library tiles
+
+on:
+  schedule:
+    - cron: '17 3 2 * *' # 03:17 UTC on the 2nd of each month
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: poi-tiles
+  cancel-in-progress: false
+
+env:
+  PROJECT: bikepacking-poi
+
+jobs:
+  tiles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      CF_TOKEN_RAW: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ACCOUNT_RAW: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Check Cloudflare secrets
+        run: |
+          token="$(printf '%s' "$CF_TOKEN_RAW" | tr -d '[:space:]')"
+          account="$(printf '%s' "$CF_ACCOUNT_RAW" | tr -d '[:space:]')"
+          printf '%s' "$token" | grep -qE '^[A-Za-z0-9_-]+$' || { echo "::error::CLOUDFLARE_API_TOKEN is missing or malformed"; exit 1; }
+          printf '%s' "$account" | grep -qE '^[0-9a-f]{32}$' || { echo "::error::CLOUDFLARE_ACCOUNT_ID is missing or malformed"; exit 1; }
+
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install osmium
+        run: sudo apt-get update -q && sudo apt-get install -y -q osmium-tool && osmium --version
+
+      - name: Build tiles
+        run: npx tsx data-pipeline/build-tiles.ts data-out
+
+      - name: Summary
+        run: |
+          du -sh data-out
+          echo "tiles: $(ls data-out/v1/tiles | wc -l)"
+          head -c 400 data-out/v1/meta.json; echo
+
+      - name: Create the data project on first run
+        run: |
+          export CLOUDFLARE_API_TOKEN="$(printf '%s' "$CF_TOKEN_RAW" | tr -d '[:space:]')"
+          export CLOUDFLARE_ACCOUNT_ID="$(printf '%s' "$CF_ACCOUNT_RAW" | tr -d '[:space:]')"
+          if npx wrangler pages project list | grep -qw "$PROJECT"; then
+            echo "Project $PROJECT exists"
+          else
+            npx wrangler pages project create "$PROJECT" --production-branch=main
+          fi
+
+      - name: Publish
+        run: |
+          export CLOUDFLARE_API_TOKEN="$(printf '%s' "$CF_TOKEN_RAW" | tr -d '[:space:]')"
+          export CLOUDFLARE_ACCOUNT_ID="$(printf '%s' "$CF_ACCOUNT_RAW" | tr -d '[:space:]')"
+          npx wrangler pages deploy data-out --project-name="$PROJECT" --branch=main --commit-dirty=true

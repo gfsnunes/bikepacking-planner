@@ -10,6 +10,7 @@ import { WaypointEditor } from './ui/WaypointEditor';
 import { WaypointManager } from './ui/WaypointManager';
 import { About } from './ui/About';
 import { Welcome } from './ui/Welcome';
+import { LibraryDialog } from './ui/LibraryDialog';
 import { WAYPOINT_FILE_ACCEPT, importWaypointsFromFile } from './ui/importFlow';
 
 // Set once the visitor has opened a route of their own; hides the "Open GPX" pointer for good.
@@ -156,6 +157,7 @@ export default function App() {
           }}
         />
         <button onClick={() => wpInput.current?.click()}>Import waypoints</button>
+        {points.length > 0 && <button onClick={() => useStore.getState().setLibraryOpen(true)}>Waypoint library</button>}
         {points.length > 0 && (
           <>
             <button className={adding ? 'active' : ''} onClick={() => useStore.getState().setAddingWaypoint(!adding)}>
@@ -229,6 +231,7 @@ export default function App() {
           </>
         )}
       </main>
+      <LibraryDialog />
     </div>
   );
 }

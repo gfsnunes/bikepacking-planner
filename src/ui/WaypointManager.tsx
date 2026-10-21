@@ -164,6 +164,7 @@ export function WaypointManager() {
             e.target.value = '';
           }}
         />
+        <button onClick={() => useStore.getState().setLibraryOpen(true)}>Waypoint library</button>
         <button onClick={() => fileInput.current?.click()}>Import waypoints</button>
         {lastDeleted && (
           <button className="undo" onClick={undoDelete}>

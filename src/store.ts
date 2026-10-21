@@ -41,6 +41,7 @@ interface Ui {
   managerDay: { k: number; nonce: number } | null; // waypoint manager should scroll to this day
   lastDeleted: Waypoint[] | null; // for undo
   notice: { text: string; kind: 'info' | 'error' } | null;
+  libraryOpen: boolean; // OpenStreetMap waypoint library dialog
 }
 
 interface Actions {
@@ -63,6 +64,7 @@ interface Actions {
   focusWaypoint(id: string): void;
   showDayInManager(k: number): void;
   setNotice(n: Ui['notice']): void;
+  setLibraryOpen(open: boolean): void;
   setHover(idx: number | null, source: 'map' | 'profile' | null): void;
   setHoverDay(k: number | null): void;
   setHoverWaypoint(id: string | null): void;
@@ -124,6 +126,7 @@ export const useStore = create<State>()((setState, getState) => {
     managerDay: null,
     lastDeleted: null,
     notice: null,
+    libraryOpen: false,
 
     loadTrack: (name, points, waypoints) => update({ name, points, waypoints: waypoints.map(sanitizeWaypoint), pinned: [] }, true),
     replacePoints: (points) => update({ points }, true),
@@ -182,6 +185,7 @@ export const useStore = create<State>()((setState, getState) => {
     },
     showDayInManager: (k) => setState({ managerDay: { k, nonce: Date.now() } }),
     setNotice: (notice) => setState({ notice }),
+    setLibraryOpen: (libraryOpen) => setState({ libraryOpen }),
     setHover: (hover, hoverSource) => setState({ hover, hoverSource }),
     setHoverDay: (hoverDay) => setState({ hoverDay }),
     setHoverWaypoint: (hoverWaypoint) => setState({ hoverWaypoint }),

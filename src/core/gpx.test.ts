@@ -51,3 +51,13 @@ describe('gpx', () => {
     for (const [name, type] of cases) expect([name, guessType(name)]).toEqual([name, type]);
   });
 });
+
+describe('gpx OSM attribution', () => {
+  it('adds the ODbL notice only when asked', () => {
+    const pts = [{ lat: 61, lon: 16 }, { lat: 61.1, lon: 16.1 }];
+    const withOsm = toGpx('R', pts, [], { osmData: true });
+    expect(withOsm).toContain('<copyright author="OpenStreetMap contributors"><license>https://opendatacommons.org/licenses/odbl/</license></copyright>');
+    expect(parseGpx(withOsm).name).toBe('R'); // still a valid GPX
+    expect(toGpx('R', pts)).not.toContain('copyright');
+  });
+});

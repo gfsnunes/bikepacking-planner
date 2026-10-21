@@ -104,7 +104,13 @@ export function toGpx(
   name: string,
   pts: { lat: number; lon: number; ele?: number | null }[],
   wpts: GpxWpt[] = [],
+  opts: { osmData?: boolean } = {},
 ): string {
+  // ODbL attribution when the file carries OpenStreetMap waypoints (https://www.openstreetmap.org/copyright).
+  const copyright = opts.osmData
+    ? '<desc>Contains waypoints from OpenStreetMap. Data © OpenStreetMap contributors, available under the Open Database License (ODbL).</desc>' +
+      '<copyright author="OpenStreetMap contributors"><license>https://opendatacommons.org/licenses/odbl/</license></copyright>'
+    : '';
   const w = wpts
     .map(
       (p) =>
@@ -122,7 +128,7 @@ export function toGpx(
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<gpx version="1.1" creator="Bikepacking Day Planner" xmlns="http://www.topografix.com/GPX/1/1">',
-    `  <metadata><name>${esc(name)}</name></metadata>`,
+    `  <metadata><name>${esc(name)}</name>${copyright}</metadata>`,
     w,
     '  <trk>',
     `    <name>${esc(name)}</name>`,

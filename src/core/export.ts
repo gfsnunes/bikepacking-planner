@@ -21,6 +21,9 @@ const SYM: Record<Waypoint['type'], string> = {
 
 const toWpt = (w: Waypoint): GpxWpt => ({ lat: w.lat, lon: w.lon, name: w.name, sym: SYM[w.type] });
 
+/** Waypoints added from the OpenStreetMap library have ids starting with "osm-". */
+const hasOsm = (wps: { id: string }[]) => wps.some((w) => w.id.startsWith('osm-'));
+
 const slug = (s: string) => s.normalize('NFC').replace(/[^\p{L}\p{N}-]+/gu, '_').replace(/^_+|_+$/g, '') || 'route';
 
 /** One GPX: full track, the user's waypoints and a waypoint at each day end. */
@@ -31,7 +34,7 @@ export function exportCombined(name: string, pts: TrackPoint[], days: Day[], wps
     name: `End of day ${i + 1}${d.snappedTo ? ` (${d.snappedTo})` : ''}`,
     sym: 'Flag, Red',
   }));
-  return toGpx(name, pts, [...wps.map(toWpt), ...ends]);
+  return toGpx(name, pts, [...wps.map(toWpt), ...ends], { osmData: hasOsm(wps) });
 }
 
 /** A ZIP with one GPX per day, each carrying the waypoints that fall within it. */
@@ -46,7 +49,8 @@ export async function exportPerDay(
   days.forEach((d, i) => {
     const n = String(i + 1).padStart(pad, '0');
     const title = `${name} - Day ${i + 1}`;
-    zip.file(`${slug(name)}_day${n}.gpx`, toGpx(title, pts.slice(d.start, d.end + 1), wpsPerDay[i].map(toWpt)));
+    const dayWps = wpsPerDay[i];
+    zip.file(`${slug(name)}_day${n}.gpx`, toGpx(title, pts.slice(d.start, d.end + 1), dayWps.map(toWpt), { osmData: hasOsm(dayWps) }));
   });
   return zip.generateAsync({ type: 'blob' });
 }

@@ -17,7 +17,11 @@ export interface ProjectionCache {
   byId: Map<string, { lat: number; lon: number; idx: number; offsetM: number }>;
 }
 
-export function projectWaypoints(points: TrackPoint[], wps: Waypoint[], cache?: ProjectionCache): ProjectedWaypoint[] {
+export function projectWaypoints<W extends Waypoint>(
+  points: TrackPoint[],
+  wps: W[],
+  cache?: ProjectionCache,
+): (W & { idx: number; offsetM: number })[] {
   if (!points.length) return [];
   let near: (lat: number, lon: number) => { idx: number; offsetM: number };
   if (cache) {

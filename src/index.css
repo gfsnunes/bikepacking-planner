@@ -292,3 +292,22 @@ button.primary { background: var(--accent); color: var(--accent-fg); border-colo
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(8px); }
 }
+
+/* Waypoint library */
+dialog.library { max-width: min(620px, calc(100vw - 32px)); width: 620px; }
+.lib-cats { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.lib-cats legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
+.lib-search { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0; }
+.lib-search select { margin-left: 0; }
+.lib-summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 6px; }
+.lib-summary .chip { cursor: pointer; background: var(--panel); }
+.lib-summary .chip.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.lib-all { display: flex; align-items: center; gap: 6px; font-size: 12px; margin: 4px 0; }
+.lib-list { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
+.lib-list li + li { border-top: 1px solid var(--grid); }
+.lib-list label { display: grid; grid-template-columns: auto auto 1fr auto auto auto; align-items: center; gap: 8px; padding: 5px 8px; font-size: 13px; cursor: pointer; }
+.lib-list li.added { opacity: 0.6; }
+.lib-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-list .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lib-list .muted { color: var(--muted); font-size: 12px; }
+.lib-credit { margin-top: 10px; }

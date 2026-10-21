@@ -311,3 +311,16 @@ dialog.library { max-width: min(620px, calc(100vw - 32px)); width: 620px; }
 .lib-list .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .lib-list .muted { color: var(--muted); font-size: 12px; }
 .lib-credit { margin-top: 10px; }
+
+/* Resupply */
+.day-resupply { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.resupply-line { display: flex; gap: 4px; align-items: flex-start; }
+.resupply-line .icon { margin-top: 2px; }
+.resupply-line.food .icon { color: #c46a00; }
+.resupply-line.water .icon { color: #1d7fd1; }
+.resupply-line .link { font-size: 12px; text-align: left; }
+.resupply-line .muted { color: var(--muted); }
+.resupply-gap { color: #d62828; font-weight: 600; }
+.settings .calc { margin: 6px 0; font-size: 13px; }
+.water-head { margin-top: 8px; }
+@media (prefers-color-scheme: dark) { .resupply-gap { color: #ff7b7b; } }

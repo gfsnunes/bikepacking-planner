@@ -116,6 +116,18 @@ function addOverlay(map: maplibregl.Map) {
     layout: { 'line-join': 'round', 'line-cap': 'round' },
     paint: { 'line-color': '#000', 'line-width': 24, 'line-opacity': 0 },
   });
+  // Resupply gaps: a wide red band under the route where food or water can't be reached in time.
+  map.addSource('resupply-gap', { type: 'geojson', data: EMPTY });
+  map.addLayer(
+    {
+      id: 'resupply-gap',
+      type: 'line',
+      source: 'resupply-gap',
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': '#d62828', 'line-width': 14, 'line-opacity': 0.3 },
+    },
+    'route-casing',
+  );
   map.addSource('hike', { type: 'geojson', data: EMPTY });
   // Dark dashes on a white casing: stays visible on every day colour and on satellite imagery.
   map.addLayer({
@@ -146,6 +158,20 @@ function addOverlay(map: maplibregl.Map) {
     type: 'circle',
     source: 'hover',
     paint: { 'circle-radius': 6, 'circle-color': '#fff', 'circle-stroke-width': 3, 'circle-stroke-color': '#222' },
+  });
+
+  // Planned resupply stops: a coloured ring under the waypoint icon (orange food, blue water).
+  map.addSource('resupply', { type: 'geojson', data: EMPTY });
+  map.addLayer({
+    id: 'resupply',
+    type: 'circle',
+    source: 'resupply',
+    paint: {
+      'circle-radius': 17,
+      'circle-color': 'rgba(0,0,0,0)',
+      'circle-stroke-width': 3,
+      'circle-stroke-color': ['match', ['get', 'kind'], 'food', '#c46a00', '#1d7fd1'],
+    },
   });
 
   // Waypoints: a clustered GeoJSON layer (scales to thousands, unlike one DOM pin each).
@@ -235,6 +261,8 @@ export function MapView() {
   const focusPoint = useStore((s) => s.focusPoint);
   const selection = useStore((s) => s.selection);
   const profile = useStore((s) => s.profile);
+  const foodPlan = useStore((s) => s.foodPlan);
+  const waterPlan = useStore((s) => s.waterPlan);
   const ready = styleVersion > 0;
 
   // Create the map once.
@@ -523,6 +551,33 @@ export function MapView() {
       })),
     });
   }, [profile, points, styleVersion, ready]);
+
+  // Resupply stops (rings) and gaps (red bands).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+    const rings = [
+      ...(foodPlan?.stops ?? []).map((s) => ({ s, kind: 'food' })),
+      ...(waterPlan?.stops ?? []).map((s) => ({ s, kind: 'water' })),
+    ];
+    const byId = new Map(waypoints.map((w) => [w.id, w]));
+    (map.getSource('resupply') as GeoJSONSource).setData({
+      type: 'FeatureCollection',
+      features: rings
+        .map(({ s, kind }) => ({ w: byId.get(s.waypointId), kind }))
+        .filter((x) => !!x.w)
+        .map(({ w, kind }) => pointFeature(w!.lon, w!.lat, { kind })),
+    });
+    const gaps = [...(foodPlan?.gaps ?? []), ...(waterPlan?.gaps ?? [])];
+    (map.getSource('resupply-gap') as GeoJSONSource).setData({
+      type: 'FeatureCollection',
+      features: gaps.map((g) => ({
+        type: 'Feature',
+        properties: {},
+        geometry: { type: 'LineString', coordinates: points.slice(g.fromIdx, g.toIdx + 1).map((q) => [q.lon, q.lat]) },
+      })),
+    });
+  }, [foodPlan, waterPlan, waypoints, points, styleVersion, ready]);
 
   // Stretch being measured on the profile.
   useEffect(() => {

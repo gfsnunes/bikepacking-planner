@@ -2,6 +2,7 @@ import { get, set } from 'idb-keyval';
 import { create } from 'zustand';
 import { guessType } from './core/gpx';
 import { DEFAULT_HIKE, type HikeSettings } from './core/hike';
+import { DEFAULT_RESUPPLY, planFood, planWater, type ResupplyPlan, type ResupplySettings } from './core/resupply';
 import type { Runs } from './core/viewport';
 import { DEFAULT_TIME_MODEL, buildProfile } from './core/metrics';
 import { pinsAfterDrag, projectWaypoints, splitDays, type ProjectedWaypoint, type ProjectionCache } from './core/splitter';
@@ -15,6 +16,7 @@ interface Inputs {
   limits: Limits;
   timeModel: TimeModel;
   hike: HikeSettings;
+  resupply: ResupplySettings;
   snap: SnapSettings;
   pinned: number[];
   cardRangeKm: number; // day cards list waypoints within this distance of the track
@@ -25,6 +27,8 @@ interface Derived {
   projected: ProjectedWaypoint[];
   days: Day[];
   stats: DayStats[];
+  foodPlan: ResupplyPlan | null;
+  waterPlan: ResupplyPlan | null;
 }
 
 interface Ui {
@@ -50,6 +54,7 @@ interface Actions {
   setLimits(l: Partial<Limits>): void;
   setTimeModel(t: Partial<TimeModel>): void;
   setHike(h: Partial<HikeSettings>): void;
+  setResupply(r: { food?: Partial<ResupplySettings['food']>; water?: Partial<ResupplySettings['water']>; maxDetourKm?: number }): void;
   setSnap(s: Partial<SnapSettings>): void;
   setCardRange(km: number): void;
   dragEnd(k: number, idx: number): void;
@@ -81,6 +86,7 @@ const DEFAULT_INPUTS: Omit<Inputs, 'name' | 'points' | 'waypoints'> = {
   limits: { maxKm: 100, maxGainM: null, maxHours: null },
   timeModel: DEFAULT_TIME_MODEL,
   hike: DEFAULT_HIKE,
+  resupply: DEFAULT_RESUPPLY,
   snap: { enabled: true, radiusKm: 10, types: ['camp', 'lodging', 'town'] },
   pinned: [],
   cardRangeKm: 5,
@@ -90,12 +96,14 @@ const DEFAULT_INPUTS: Omit<Inputs, 'name' | 'points' | 'waypoints'> = {
 const projectionCache: ProjectionCache = { byId: new Map() };
 
 function derive(s: Inputs, prev?: Derived, rebuildProfile = true): Derived {
-  if (!s.points.length) return { profile: null, projected: [], days: [], stats: [] };
+  if (!s.points.length) return { profile: null, projected: [], days: [], stats: [], foodPlan: null, waterPlan: null };
   const profile = rebuildProfile || !prev?.profile ? buildProfile(s.points, { timeModel: s.timeModel, hike: s.hike }) : prev.profile;
   const projected = projectWaypoints(s.points, s.waypoints, projectionCache);
   const days = splitDays(profile, s.limits, s.pinned, projected, s.snap);
   const stats = days.map((d) => dayStats(profile, d, projected, s.cardRangeKm * 1000));
-  return { profile, projected, days, stats };
+  const foodPlan = planFood(profile, days, projected, s.resupply);
+  const waterPlan = planWater(profile, projected, s.resupply);
+  return { profile, projected, days, stats, foodPlan, waterPlan };
 }
 
 export const useStore = create<State>()((setState, getState) => {
@@ -113,6 +121,8 @@ export const useStore = create<State>()((setState, getState) => {
     projected: [],
     days: [],
     stats: [],
+    foodPlan: null,
+    waterPlan: null,
     hover: null,
     hoverSource: null,
     hoverDay: null,
@@ -133,6 +143,16 @@ export const useStore = create<State>()((setState, getState) => {
     setLimits: (l) => update({ limits: { ...getState().limits, ...l } }),
     setTimeModel: (t) => update({ timeModel: { ...getState().timeModel, ...t } }, true),
     setHike: (h) => update({ hike: { ...getState().hike, ...h } }, true),
+    setResupply: (r) => {
+      const cur = getState().resupply;
+      update({
+        resupply: {
+          food: { ...cur.food, ...r.food },
+          water: { ...cur.water, ...r.water },
+          maxDetourKm: r.maxDetourKm ?? cur.maxDetourKm,
+        },
+      });
+    },
     setSnap: (sn) => update({ snap: { ...getState().snap, ...sn } }),
     setCardRange: (cardRangeKm) => update({ cardRangeKm }),
     dragEnd: (k, idx) => {
@@ -202,7 +222,7 @@ const KEY = 'bikepacking-planner:last-trip';
 // Settings written synchronously on page close, because an IndexedDB write started while the page
 // unloads does not complete. Applied on top of the IndexedDB copy if it belongs to the same track.
 const PENDING_KEY = 'bikepacking-planner:pending';
-type Pending = Pick<Inputs, 'limits' | 'timeModel' | 'hike' | 'snap' | 'pinned' | 'cardRangeKm'> & Partial<Pick<Inputs, 'waypoints'>> & { track: string };
+type Pending = Pick<Inputs, 'limits' | 'timeModel' | 'hike' | 'resupply' | 'snap' | 'pinned' | 'cardRangeKm'> & Partial<Pick<Inputs, 'waypoints'>> & { track: string };
 const trackId = (name: string, points: TrackPoint[]) => `${name}|${points.length}`;
 
 let restoring: Promise<void> | undefined;
@@ -233,6 +253,11 @@ async function doRestore() {
       ...saved,
       timeModel: { ...DEFAULT_INPUTS.timeModel, ...saved.timeModel },
       hike: { ...DEFAULT_INPUTS.hike, ...saved.hike },
+      resupply: {
+        food: { ...DEFAULT_RESUPPLY.food, ...saved.resupply?.food },
+        water: { ...DEFAULT_RESUPPLY.water, ...saved.resupply?.water },
+        maxDetourKm: saved.resupply?.maxDetourKm ?? DEFAULT_RESUPPLY.maxDetourKm,
+      },
       snap: { ...DEFAULT_INPUTS.snap, ...saved.snap },
     };
     inputs.waypoints = (inputs.waypoints ?? []).map(sanitizeWaypoint);
@@ -249,8 +274,8 @@ let savedVersion = 0; // last version confirmed written to IndexedDB
 function save() {
   timer = undefined;
   const v = version;
-  const { name, points, waypoints, limits, timeModel, hike, snap, pinned, cardRangeKm } = useStore.getState();
-  set(KEY, { name, points, waypoints, limits, timeModel, hike, snap, pinned, cardRangeKm })
+  const { name, points, waypoints, limits, timeModel, hike, resupply, snap, pinned, cardRangeKm } = useStore.getState();
+  set(KEY, { name, points, waypoints, limits, timeModel, hike, resupply, snap, pinned, cardRangeKm })
     .then(() => {
       savedVersion = Math.max(savedVersion, v);
       if (savedVersion !== version) return;
@@ -264,7 +289,7 @@ function save() {
 }
 useStore.subscribe((s, prev) => {
   if (!s.points.length) return;
-  const changed = (['name', 'points', 'waypoints', 'limits', 'timeModel', 'hike', 'snap', 'pinned', 'cardRangeKm'] as const).some(
+  const changed = (['name', 'points', 'waypoints', 'limits', 'timeModel', 'hike', 'resupply', 'snap', 'pinned', 'cardRangeKm'] as const).some(
     (k) => s[k] !== prev[k],
   );
   if (!changed) return;
@@ -278,8 +303,8 @@ const flush = () => {
   if (savedVersion === version) return;
   if (timer !== undefined) (clearTimeout(timer), save());
   try {
-    const { name, points, waypoints, limits, timeModel, hike, snap, pinned, cardRangeKm } = useStore.getState();
-    const pending: Pending = { track: trackId(name, points), waypoints, limits, timeModel, hike, snap, pinned, cardRangeKm };
+    const { name, points, waypoints, limits, timeModel, hike, resupply, snap, pinned, cardRangeKm } = useStore.getState();
+    const pending: Pending = { track: trackId(name, points), waypoints, limits, timeModel, hike, resupply, snap, pinned, cardRangeKm };
     let json = JSON.stringify(pending);
     // Keep well inside the ~5 MB localStorage quota; a huge waypoint list is left to IndexedDB.
     if (json.length > 2_000_000) {

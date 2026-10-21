@@ -5,6 +5,7 @@ import { WAYPOINT_TYPES, type Day, type LimitReason } from '../core/types';
 import { useStore } from '../store';
 import { WAYPOINT_STYLE, dayColor, fmtH, fmtKm, fmtM } from './colors';
 import { iconSvg } from './icons';
+import { DayResupply, ResupplySection, ResupplySummary } from './Resupply';
 
 function Icon({ type, size = 12 }: { type: keyof typeof WAYPOINT_STYLE; size?: number }) {
   // Static SVG markup generated from the Lucide icon set, not user input.
@@ -115,6 +116,8 @@ export function Settings() {
       </details>
 
       <HikeSection />
+
+      <ResupplySection />
 
       <details>
         <summary>Snap day ends to waypoints</summary>
@@ -291,6 +294,7 @@ export function TripSummary() {
             </dd>
           </div>
         )}
+        <ResupplySummary />
         <div>
           <dt>Average day</dt>
           <dd>
@@ -388,6 +392,7 @@ export function DayStrip() {
                 Hike-a-bike {fmtKm(s.hikeKm)} · {fmtH(s.hikeHours)}
               </div>
             )}
+            <DayResupply d={d} k={k} hours={s.hours} />
             {s.waypoints.length > 0 && (
               <div className="day-wps">
                 {s.waypoints.slice(0, MAX_CHIPS).map((w) => (

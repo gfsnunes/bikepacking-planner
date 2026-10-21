@@ -14,26 +14,80 @@ import { createInterface } from 'node:readline';
 import { TILE_VERSION, featuresToItems, osmiumFilters, toTiles, type TileMeta } from '../src/core/poi-tiles';
 import type { LibraryItem } from '../src/core/osm-library';
 
-// Start with the Nordics; add Geofabrik region paths here to grow coverage.
+// Geofabrik's Europe sub-regions, minus the ones that repeat others (alps, dach, britain-and-ireland,
+// united-kingdom). Russia is a separate top-level Geofabrik region. Downloaded one at a time (14 GB runner disk).
 const REGIONS: { name: string; path: string }[] = [
-  { name: 'Sweden', path: 'europe/sweden' },
-  { name: 'Norway', path: 'europe/norway' },
-  { name: 'Finland', path: 'europe/finland' },
+  { name: 'Albania', path: 'europe/albania' },
+  { name: 'Andorra', path: 'europe/andorra' },
+  { name: 'Austria', path: 'europe/austria' },
+  { name: 'Azores', path: 'europe/azores' },
+  { name: 'Belarus', path: 'europe/belarus' },
+  { name: 'Belgium', path: 'europe/belgium' },
+  { name: 'Bosnia-Herzegovina', path: 'europe/bosnia-herzegovina' },
+  { name: 'Bulgaria', path: 'europe/bulgaria' },
+  { name: 'Croatia', path: 'europe/croatia' },
+  { name: 'Cyprus', path: 'europe/cyprus' },
+  { name: 'Czech Republic', path: 'europe/czech-republic' },
   { name: 'Denmark', path: 'europe/denmark' },
+  { name: 'Estonia', path: 'europe/estonia' },
+  { name: 'Faroe Islands', path: 'europe/faroe-islands' },
+  { name: 'Finland', path: 'europe/finland' },
+  { name: 'France', path: 'europe/france' },
+  { name: 'Georgia', path: 'europe/georgia' },
+  { name: 'Germany', path: 'europe/germany' },
+  { name: 'Great Britain', path: 'europe/great-britain' },
+  { name: 'Greece', path: 'europe/greece' },
+  { name: 'Guernsey and Jersey', path: 'europe/guernsey-jersey' },
+  { name: 'Hungary', path: 'europe/hungary' },
+  { name: 'Iceland', path: 'europe/iceland' },
+  { name: 'Ireland and Northern Ireland', path: 'europe/ireland-and-northern-ireland' },
+  { name: 'Isle of Man', path: 'europe/isle-of-man' },
+  { name: 'Italy', path: 'europe/italy' },
+  { name: 'Kosovo', path: 'europe/kosovo' },
+  { name: 'Latvia', path: 'europe/latvia' },
+  { name: 'Liechtenstein', path: 'europe/liechtenstein' },
+  { name: 'Lithuania', path: 'europe/lithuania' },
+  { name: 'Luxembourg', path: 'europe/luxembourg' },
+  { name: 'North Macedonia', path: 'europe/macedonia' },
+  { name: 'Malta', path: 'europe/malta' },
+  { name: 'Moldova', path: 'europe/moldova' },
+  { name: 'Monaco', path: 'europe/monaco' },
+  { name: 'Montenegro', path: 'europe/montenegro' },
+  { name: 'Netherlands', path: 'europe/netherlands' },
+  { name: 'Norway', path: 'europe/norway' },
+  { name: 'Poland', path: 'europe/poland' },
+  { name: 'Portugal', path: 'europe/portugal' },
+  { name: 'Romania', path: 'europe/romania' },
+  { name: 'Serbia', path: 'europe/serbia' },
+  { name: 'Slovakia', path: 'europe/slovakia' },
+  { name: 'Slovenia', path: 'europe/slovenia' },
+  { name: 'Spain', path: 'europe/spain' },
+  { name: 'Sweden', path: 'europe/sweden' },
+  { name: 'Switzerland', path: 'europe/switzerland' },
+  { name: 'Turkey', path: 'europe/turkey' },
+  { name: 'Ukraine', path: 'europe/ukraine' },
 ];
 
 const out = process.argv[2] ?? 'data-out';
 const work = join(out, '..', 'data-work');
 const run = (cmd: string, args: string[]) => execFileSync(cmd, args, { stdio: 'inherit' });
 
-async function readSeq(file: string) {
-  const features = [];
+/** Stream a geojsonseq file into library items in batches, so a large country never sits in memory as GeoJSON. */
+async function readItems(file: string) {
+  const items: LibraryItem[] = [];
+  let batch: Parameters<typeof featuresToItems>[0] = [];
+  const flush = () => {
+    for (const it of featuresToItems(batch)) items.push(it);
+    batch = [];
+  };
   const rl = createInterface({ input: createReadStream(file, 'utf8'), crlfDelay: Infinity });
   for await (const raw of rl) {
     const line = raw.replace(/^\u001e/, '').trim(); // geojsonseq record separator
-    if (line) features.push(JSON.parse(line));
+    if (line) batch.push(JSON.parse(line));
+    if (batch.length >= 20_000) flush();
   }
-  return features;
+  flush();
+  return items;
 }
 
 async function main() {
@@ -55,7 +109,7 @@ async function main() {
     run('osmium', ['tags-filter', pbf, ...osmiumFilters(), '-o', filtered, '--overwrite']);
     rmSync(pbf); // keep disk use to one extract at a time
     run('osmium', ['export', filtered, '-f', 'geojsonseq', '--geometry-types=point,polygon', '-c', config, '-o', seq, '--overwrite']);
-    const items = featuresToItems(await readSeq(seq));
+    const items = await readItems(seq);
     rmSync(filtered);
     rmSync(seq);
     if (!items.length) throw new Error(`${r.name}: no places found; refusing to publish an empty region`);
@@ -68,7 +122,7 @@ async function main() {
     }
     regions.push({ name: r.name, bbox: [+w.toFixed(3), +s.toFixed(3), +e.toFixed(3), +n.toFixed(3)] });
     console.log(`${r.name}: ${items.length} places`);
-    all.push(...items);
+    for (const it of items) all.push(it); // spread would overflow the stack for millions
   }
 
   const tiles = toTiles(all);

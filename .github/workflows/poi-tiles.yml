@@ -21,7 +21,7 @@ env:
 jobs:
   tiles:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 300
     env:
       CF_TOKEN_RAW: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CF_ACCOUNT_RAW: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -47,6 +47,8 @@ jobs:
 
       - name: Build tiles
         run: npx tsx data-pipeline/build-tiles.ts data-out
+        env:
+          NODE_OPTIONS: --max-old-space-size=12288
 
       - name: Summary
         run: |

@@ -185,7 +185,7 @@ export function LibraryDialog() {
               <p className="hint">
                 {status.source === 'tiles'
                   ? `From the built-in library (OpenStreetMap data as of ${status.built}).`
-                  : 'Searched live on OpenStreetMap: your route is outside the built-in library (currently the Nordics).'}
+                  : 'Searched live on OpenStreetMap: your route is outside the built-in library (currently Europe).'}
               </p>
               <div className="lib-summary">
                 <button className={`chip ${show === null ? 'active' : ''}`} onClick={() => setShow(null)}>

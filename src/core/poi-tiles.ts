@@ -122,9 +122,14 @@ export function cellsAlong(points: { lat: number; lon: number }[], radiusM: numb
   return [...keys];
 }
 
-/** True when every point lies inside one of the regions the tiles were built from. */
+/**
+ * True when every point lies in a 1° cell the library has places for. Region bounding boxes are too
+ * loose for this (Spain's box takes in the Canaries and so most of Morocco); a route through an empty
+ * cell falls back to the live search.
+ */
 export function covered(points: { lat: number; lon: number }[], meta: TileMeta): boolean {
-  return points.every((p) => meta.regions.some(({ bbox: [w, s, e, n] }) => p.lon >= w && p.lon <= e && p.lat >= s && p.lat <= n));
+  const have = new Set(meta.tiles);
+  return points.every((p) => have.has(cellKey(p.lat, p.lon)));
 }
 
 export const rowToItem = ([id, lat, lon, name, type, category]: TileRow): LibraryItem => ({ id, lat, lon, name, type, category });

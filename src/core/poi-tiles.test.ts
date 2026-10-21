@@ -48,8 +48,11 @@ describe('pre-built tiles', () => {
   });
 
   it('checks route coverage against the built regions', () => {
-    const meta = { built: '2026-10-21', regions: [{ name: 'Sweden', bbox: [10.5, 55.3, 24.2, 69.1] as [number, number, number, number] }], tiles: [] };
+    const meta = { built: '2026-10-21', regions: [{ name: 'Spain', bbox: [-18.2, 27.6, 4.4, 43.8] as [number, number, number, number] }], tiles: ['61_16', '40_-4'] };
     expect(covered([{ lat: 61.3, lon: 16.4 }], meta)).toBe(true);
     expect(covered([{ lat: 61.3, lon: 16.4 }, { lat: 45.0, lon: 9.0 }], meta)).toBe(false);
+    expect(covered([{ lat: 40.4, lon: -3.7 }], meta)).toBe(true);
+    // Inside Spain's bounding box (because of the Canaries) but a cell with no data: Morocco.
+    expect(covered([{ lat: 31.6, lon: -8.0 }], meta)).toBe(false);
   });
 });

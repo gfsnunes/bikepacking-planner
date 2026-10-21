@@ -45,7 +45,7 @@ export function About() {
           </li>
           <li>Elevation: Open-Meteo Elevation API, Copernicus DEM GLO-90 (free tier for non-commercial use).</li>
           <li>
-            Waypoint library: places © OpenStreetMap contributors, available under the Open Database License (ODbL). The Nordics come from a
+            Waypoint library: places © OpenStreetMap contributors, available under the Open Database License (ODbL). Europe comes from a
             built-in library refreshed monthly from Geofabrik extracts (nothing about your route is sent). Elsewhere it searches the public
             Overpass API live, which sends a simplified outline of your route to Overpass.
           </li>

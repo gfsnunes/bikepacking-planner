@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { fillElevation, needsElevation } from './core/elevation-fill';
 import { download, exportCombined, exportPerDay, slug } from './core/export';
 import { parseGpx } from './core/gpx';
+import { isFullView } from './core/trim';
 import { restoreLastTrip, useStore } from './store';
 import { parseLink } from './sync/crypto';
 import { joinShare, leaveShare, savedShare } from './sync/session';
@@ -63,7 +64,7 @@ export default function App() {
   const adding = useStore((s) => s.addingWaypoint);
   const notice = useStore((s) => s.notice);
   const readOnly = useStore((s) => !!s.share && !s.share.canWrite);
-  const lastTrack = useStore((s) => s.lastTrack);
+  const cropped = useStore((s) => s.source.length > 0 && !isFullView(s.view, s.source.length));
   const wpInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [ele, setEle] = useState<EleState>({ kind: 'idle' });
@@ -205,8 +206,10 @@ export default function App() {
                 Reverse
               </button>
             )}
-            {!readOnly && lastTrack && (
-              <button onClick={() => useStore.getState().undoTrackEdit()}>Undo {lastTrack.label}</button>
+            {!readOnly && cropped && (
+              <button onClick={() => useStore.getState().restoreFullRoute()} title="Go back to the whole route from the GPX">
+                Restore full route
+              </button>
             )}
             <ShareButton />
             <button onClick={exportOne}>Export GPX</button>

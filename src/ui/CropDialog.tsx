@@ -1,8 +1,8 @@
 import * as maplibregl from 'maplibre-gl';
 import type { GeoJSONSource } from 'maplibre-gl';
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { nearestIndex } from '../core/geo';
-import { indexAtKm, kmAt, tickStep } from '../core/trim';
+import { cumulativeDist, indexAtKm, kmAt, ridingRange, ridingSource, tickStep } from '../core/trim';
 import type { TrackPoint } from '../core/types';
 import { useStore } from '../store';
 import { BASEMAPS, boundsOf, savedBasemap } from './basemaps';
@@ -20,32 +20,42 @@ function endMarker(label: string, cls: string) {
   return el;
 }
 
-/** "Crop route": pick a new start and end on the full track with a two-handle slider or by dragging S/E on a map. */
+/**
+ * "Crop route": pick the start and end on the original GPX track (in riding direction) with a
+ * two-handle slider or by dragging S/E on a map. The original is kept, so a crop can be widened again.
+ */
 export function CropDialog() {
   const open = useStore((s) => s.cropOpen);
-  const points = useStore((s) => s.points);
-  const profile = useStore((s) => s.profile);
+  const trackPoints = useStore((s) => s.points);
+  const source = useStore((s) => s.source);
+  const reversed = useStore((s) => s.view.reversed);
+  // The original track in riding direction, and distance along it.
+  const points = useMemo(() => ridingSource(source, reversed), [source, reversed]);
+  const dist = useMemo(() => cumulativeDist(points), [points]);
   const dialog = useRef<HTMLDialogElement>(null);
   const mapBox = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markers = useRef<{ s: maplibregl.Marker; e: maplibregl.Marker } | null>(null);
   const dragging = useRef<'s' | 'e' | null>(null);
+  const openedOn = useRef<TrackPoint[] | null>(null); // the route when the window opened
   const [a, setA] = useState(0);
   const [b, setB] = useState(0);
   const [redraw, setRedraw] = useState(0); // map ready / drag ended: re-place the kept line and markers
   const n = points.length;
-  const dist = profile?.dist;
-  const totalKm = dist ? kmAt(dist, n - 1) : 0;
+  const totalKm = n ? kmAt(dist, n - 1) : 0;
   // Content (and the map) only while open with a range that fits the current track.
-  const showing = open && !!dist && n >= 2 && b < n && b > a;
+  const showing = open && n >= 2 && b < n && b > a;
 
-  // Open/close the native dialog from the store flag; start from the full route each time.
+  // Open/close the native dialog from the store flag; start from the current crop.
   useEffect(() => {
     const d = dialog.current;
     if (!d) return;
     if (open && !d.open) {
-      setA(0);
-      setB(Math.max(0, useStore.getState().points.length - 1));
+      const { view, source: src } = useStore.getState();
+      const [ra, rb] = src.length > 1 ? ridingRange(view, src.length) : [0, 0];
+      setA(ra);
+      setB(rb);
+      openedOn.current = useStore.getState().points;
       d.showModal();
     }
     if (!open && d.open) d.close();
@@ -54,8 +64,8 @@ export function CropDialog() {
   // The track changed while open (a collaborator in a shared trip cropped or reversed it): the range
   // no longer fits, so close rather than show a stale or empty window.
   useEffect(() => {
-    if (useStore.getState().cropOpen) useStore.getState().setCropOpen(false);
-  }, [points]);
+    if (useStore.getState().cropOpen && openedOn.current && trackPoints !== openedOn.current) useStore.getState().setCropOpen(false);
+  }, [trackPoints]);
 
   // React's onClose/onCancel don't fire reliably for <dialog> (see Welcome), so listen natively.
   useEffect(() => {
@@ -138,7 +148,6 @@ export function CropDialog() {
 
   /** Move a handle; pan the map when the point leaves the middle of the view, so a zoomed-in map follows. */
   function moveTo(which: 's' | 'e', km: number) {
-    if (!dist) return;
     const idx = indexAtKm(dist, km);
     const next = which === 's' ? Math.min(idx, b - 1) : Math.max(idx, a + 1);
     if (which === 's') setA(Math.max(0, next));
@@ -159,12 +168,12 @@ export function CropDialog() {
     ev.preventDefault();
     if (page) return moveTo(which, km + page);
     const i = (which === 's' ? a : b) + point!;
-    if (which === 's' && i >= 0 && i < b) moveTo('s', kmAt(dist!, i));
-    if (which === 'e' && i > a && i < n) moveTo('e', kmAt(dist!, i));
+    if (which === 's' && i >= 0 && i < b) moveTo('s', kmAt(dist, i));
+    if (which === 'e' && i > a && i < n) moveTo('e', kmAt(dist, i));
   };
 
   // Closed, or the range is from before the track changed (e.g. right after a crop): render the empty shell.
-  if (!showing || !dist) return <dialog ref={dialog} className="about crop" />;
+  if (!showing) return <dialog ref={dialog} className="about crop" />;
 
   const aKm = kmAt(dist, a);
   const bKm = kmAt(dist, b);
@@ -173,14 +182,17 @@ export function CropDialog() {
   for (let k = 0; k <= totalKm + 1e-9; k += step) ticks.push(k);
   const pct = (km: number) => (totalKm ? (km / totalKm) * 100 : 0);
   const ele = (i: number) => (points[i].ele != null ? ` · ${Math.round(points[i].ele!)} m` : '');
-  const unchanged = a === 0 && b === n - 1;
+  const full = a === 0 && b === n - 1;
+  const [ca, cb] = ridingRange(useStore.getState().view, n);
+  const unchanged = a === ca && b === cb;
 
   return (
     <dialog ref={dialog} className="about crop">
       <h2>Crop route</h2>
       <p className="hint">
-        Drag the handles below, or the <strong>S</strong> and <strong>E</strong> markers on the map, to set where the route starts and
-        ends. Zoom in for precise placement. Arrow keys move a handle one track point, Page Up/Down 1 km.
+        This is the whole route from your GPX. Drag the handles below, or the <strong>S</strong> and <strong>E</strong> markers on the
+        map, to set where the route starts and ends; you can widen it again any time. Zoom in for precise placement. Arrow keys move a
+        handle one track point, Page Up/Down 1 km.
       </p>
       <div ref={mapBox} className="crop-map" />
       <div className="crop-slider" style={{ ['--a' as string]: `${pct(aKm)}%`, ['--b' as string]: `${pct(bKm)}%` }}>
@@ -224,7 +236,7 @@ export function CropDialog() {
         </span>
         <span>
           Keeps <strong>{(bKm - aKm).toFixed(1)} km</strong>
-          {!unchanged &&
+          {!full &&
             ` (cuts ${[a > 0 && `${aKm.toFixed(1)} km at the start`, b < n - 1 && `${(totalKm - bKm).toFixed(1)} km at the end`]
               .filter(Boolean)
               .join(' and ')})`}
@@ -239,9 +251,10 @@ export function CropDialog() {
             useStore.getState().setCropOpen(false);
           }}
         >
-          Crop route
+          Apply
         </button>
         <button
+          disabled={full}
           onClick={() => {
             setA(0);
             setB(n - 1);
@@ -249,7 +262,7 @@ export function CropDialog() {
             map?.fitBounds(boundsOf(points), { padding: 40 });
           }}
         >
-          Reset
+          Whole route
         </button>
         <button className="link" onClick={() => useStore.getState().setCropOpen(false)}>
           Cancel

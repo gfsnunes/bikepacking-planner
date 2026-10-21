@@ -9,7 +9,7 @@ import type { SyncStatus } from './sync/client';
 import { DEFAULT_TIME_MODEL, buildProfile } from './core/metrics';
 import { pinsAfterDrag, projectWaypoints, splitDays, type ProjectedWaypoint, type ProjectionCache } from './core/splitter';
 import { dayStats } from './core/stats';
-import { cropPins, cropTrack, reverseTrack } from './core/trim';
+import { carryPins, fullView, validView, viewFromRiding, viewPoints, type TrackView } from './core/trim';
 import { sanitizeWaypoint, safeType, type Day, type DayStats, type Limits, type Profile, type SnapSettings, type TimeModel, type TrackPoint, type Waypoint } from './core/types';
 
 interface Inputs {
@@ -23,6 +23,8 @@ interface Inputs {
   snap: SnapSettings;
   pinned: number[];
   cardRangeKm: number; // day cards list waypoints within this distance of the track
+  source: TrackPoint[]; // the track as loaded from the GPX; `points` is a view of it (crop / reverse)
+  view: TrackView; // which stretch of `source` is in use, and its direction
 }
 
 interface Derived {
@@ -60,7 +62,6 @@ interface Ui {
   share: ShareState | null; // the open shared trip, if any
   shareOpen: boolean; // Save & share dialog
   cropOpen: boolean; // Crop route dialog
-  lastTrack: { points: TrackPoint[]; pinned: number[]; label: 'crop' | 'reverse' } | null; // for Undo (memory only)
 }
 
 interface Actions {
@@ -100,14 +101,15 @@ interface Actions {
   setShare(s: ShareState | null): void;
   setShareOpen(open: boolean): void;
   setCropOpen(open: boolean): void;
-  cropTo(a: number, b: number): void;
+  /** Use the stretch ra..rb of the original track, as shown in riding direction in the crop window. */
+  cropTo(ra: number, rb: number): void;
+  restoreFullRoute(): void;
   reverseRoute(): void;
-  undoTrackEdit(): void;
 }
 
 export type State = Inputs & Derived & Ui & Actions;
 
-const DEFAULT_INPUTS: Omit<Inputs, 'name' | 'points' | 'waypoints'> = {
+const DEFAULT_INPUTS: Omit<Inputs, 'name' | 'points' | 'waypoints' | 'source' | 'view'> = {
   limits: { maxKm: 100, maxGainM: null, maxHours: null },
   timeModel: DEFAULT_TIME_MODEL,
   hike: DEFAULT_HIKE,
@@ -148,6 +150,8 @@ export const useStore = create<State>()((setState, getState) => {
     name: '',
     points: [],
     waypoints: [],
+    source: [],
+    view: fullView(0),
     ...DEFAULT_INPUTS,
     profile: null,
     projected: [],
@@ -173,13 +177,17 @@ export const useStore = create<State>()((setState, getState) => {
     share: null,
     shareOpen: false,
     cropOpen: false,
-    lastTrack: null,
 
     loadTrack: (name, points, waypoints) => {
-      setState({ selectedDay: null, lastTrack: null });
-      update({ name, points, waypoints: waypoints.map(sanitizeWaypoint), pinned: [] }, true);
+      setState({ selectedDay: null });
+      update({ name, points, source: points, view: fullView(points.length), waypoints: waypoints.map(sanitizeWaypoint), pinned: [] }, true);
     },
-    replacePoints: (points) => update({ points }, true),
+    replacePoints: (points) => {
+      // Same points with new data (elevation lookup): carry the change into the original too.
+      const { points: old, source } = getState();
+      const swap = new Map(old.length === points.length ? old.map((p, i) => [p, points[i]]) : []);
+      update({ points, source: swap.size ? source.map((p) => swap.get(p) ?? p) : points, ...(swap.size ? {} : { view: fullView(points.length) }) }, true);
+    },
     setLimits: (l) => update({ limits: { ...getState().limits, ...l } }),
     setTimeModel: (t) => update({ timeModel: { ...getState().timeModel, ...t } }, true),
     setHike: (h) => update({ hike: { ...getState().hike, ...h } }, true),
@@ -257,29 +265,32 @@ export const useStore = create<State>()((setState, getState) => {
     toggleDay: (k) =>
       setState(getState().selectedDay === k ? { selectedDay: null } : { selectedDay: k, focusDay: { k, nonce: Date.now() } }),
     clearSelectedDay: () => setState({ selectedDay: null }),
-    applyShared: (patch) => update(patch, 'points' in patch || 'timeModel' in patch || 'hike' in patch, true),
+    // A track from the shared trip becomes this browser's original (it can't be widened beyond it here).
+    applyShared: (patch) =>
+      update(
+        patch.points ? { ...patch, source: patch.points, view: fullView(patch.points.length) } : patch,
+        'points' in patch || 'timeModel' in patch || 'hike' in patch,
+        true,
+      ),
     setShare: (share) => setState({ share }),
     setShareOpen: (shareOpen) => setState({ shareOpen }),
     setCropOpen: (cropOpen) => setState({ cropOpen }),
-    cropTo: (a, b) => {
-      const { points, pinned } = getState();
-      update({ points: cropTrack(points, a, b), pinned: cropPins(pinned, a, b) }, true);
-      if (getState().points === points) return; // refused (view-only link)
-      setState({ lastTrack: { points, pinned, label: 'crop' }, selectedDay: null, selection: null, hover: null });
+    cropTo: (ra, rb) => {
+      const { points, source, view, pinned } = getState();
+      const v = viewFromRiding(ra, rb, source.length, view.reversed);
+      if (!validView(v, source.length) || (v.a === view.a && v.b === view.b)) return;
+      const next = viewPoints(source, v);
+      update({ points: next, view: v, pinned: carryPins(pinned, points, next) }, true);
+      if (getState().points !== points) setState({ selectedDay: null, selection: null, hover: null });
     },
+    restoreFullRoute: () => getState().cropTo(0, getState().source.length - 1),
     reverseRoute: () => {
-      const { points, pinned } = getState();
-      update({ points: reverseTrack(points), pinned: [] }, true);
-      if (getState().points === points) return;
-      setState({ lastTrack: { points, pinned, label: 'reverse' }, selectedDay: null, selection: null, hover: null });
+      const { points, source, view, pinned } = getState();
+      const v = { ...view, reversed: !view.reversed };
+      update({ points: viewPoints(source, v), view: v, pinned: [] }, true);
+      if (getState().points === points) return; // refused (view-only link)
+      setState({ selectedDay: null, selection: null, hover: null });
       if (pinned.length) setState({ notice: { text: 'Route reversed. Day ends you placed by hand were reset.', kind: 'info' } });
-    },
-    undoTrackEdit: () => {
-      const last = getState().lastTrack;
-      if (!last) return;
-      const before = getState().points;
-      update({ points: last.points, pinned: last.pinned }, true);
-      if (getState().points !== before) setState({ lastTrack: null, selectedDay: null, selection: null, hover: null });
     },
   };
 });
@@ -326,7 +337,14 @@ async function doRestore() {
         maxDetourKm: saved.resupply?.maxDetourKm ?? DEFAULT_RESUPPLY.maxDetourKm,
       },
       snap: { ...DEFAULT_INPUTS.snap, ...saved.snap },
+      // Trips saved before crop/reverse kept the original: their route is the original.
+      source: saved.source?.length ? saved.source : saved.points,
+      view: saved.view ?? fullView(saved.points.length),
     };
+    if (!validView(inputs.view, inputs.source.length) || viewPoints(inputs.source, inputs.view).length !== inputs.points.length) {
+      inputs.source = inputs.points;
+      inputs.view = fullView(inputs.points.length);
+    }
     inputs.waypoints = (inputs.waypoints ?? []).map(sanitizeWaypoint);
     inputs.snap.types = inputs.snap.types.map(safeType);
     useStore.setState({ ...inputs, ...derive(inputs, s, true) });
@@ -341,8 +359,8 @@ let savedVersion = 0; // last version confirmed written to IndexedDB
 function save() {
   timer = undefined;
   const v = version;
-  const { name, points, waypoints, limits, timeModel, hike, resupply, snap, pinned, cardRangeKm } = useStore.getState();
-  set(KEY, { name, points, waypoints, limits, timeModel, hike, resupply, snap, pinned, cardRangeKm })
+  const { name, points, waypoints, limits, timeModel, hike, resupply, snap, pinned, cardRangeKm, source, view } = useStore.getState();
+  set(KEY, { name, points, waypoints, limits, timeModel, hike, resupply, snap, pinned, cardRangeKm, source, view })
     .then(() => {
       savedVersion = Math.max(savedVersion, v);
       if (savedVersion !== version) return;
@@ -356,7 +374,7 @@ function save() {
 }
 useStore.subscribe((s, prev) => {
   if (!s.points.length) return;
-  const changed = (['name', 'points', 'waypoints', 'limits', 'timeModel', 'hike', 'resupply', 'snap', 'pinned', 'cardRangeKm'] as const).some(
+  const changed = (['name', 'points', 'waypoints', 'limits', 'timeModel', 'hike', 'resupply', 'snap', 'pinned', 'cardRangeKm', 'source', 'view'] as const).some(
     (k) => s[k] !== prev[k],
   );
   if (!changed) return;

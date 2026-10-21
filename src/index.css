@@ -139,9 +139,10 @@ summary { cursor: pointer; font-weight: 600; }
 .day {
   flex: none; width: 236px; background: var(--panel); border: 1px solid var(--border); border-top: 5px solid;
   border-radius: 8px; padding: 8px 10px; cursor: pointer; scroll-snap-align: start; display: flex; flex-direction: column;
-  gap: 4px; transition: box-shadow 0.12s, transform 0.12s;
+  gap: 4px; transition: box-shadow 0.12s;
 }
-.day.active { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18); transform: translateY(-2px); }
+.day.active { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18); }
+.day.selected { box-shadow: 0 0 0 2px var(--day), 0 2px 12px rgba(0, 0, 0, 0.22); }
 .day-title { display: flex; gap: 6px; align-items: center; justify-content: space-between; }
 .describe { margin: 0; font-size: 13px; font-style: italic; }
 .day-stats { display: flex; gap: 10px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }

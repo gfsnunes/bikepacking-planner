@@ -64,7 +64,7 @@ export function ElevationProfile() {
   const plot = useRef<uPlot | null>(null);
   const profile = useStore((s) => s.profile);
   const days = useStore((s) => s.days);
-  const hoverDay = useStore((s) => s.hoverDay);
+  const emphDay = useStore((s) => s.hoverDay ?? s.selectedDay);
 
   // (Re)create the chart when the profile changes.
   useEffect(() => {
@@ -78,12 +78,13 @@ export function ElevationProfile() {
 
     const drawBands = (u: uPlot) => {
       const { ctx, bbox } = u;
-      const { days: ds, hoverDay } = useStore.getState();
+      const { days: ds, hoverDay: hd, selectedDay } = useStore.getState();
+      const emph = hd ?? selectedDay;
       ctx.save();
       ds.forEach((d, k) => {
         const x0 = u.valToPos(xs[d.start], 'x', true);
         const x1 = u.valToPos(xs[d.end], 'x', true);
-        ctx.fillStyle = dayColor(k) + (k === hoverDay ? '55' : k % 2 ? '1a' : '10');
+        ctx.fillStyle = dayColor(k) + (k === emph ? '55' : k % 2 ? '1a' : '10');
         ctx.fillRect(x0, bbox.top, x1 - x0, bbox.height);
       });
       if (runs.length) {
@@ -349,7 +350,7 @@ export function ElevationProfile() {
   // Redraw overlays when days or the highlighted day change.
   useEffect(() => {
     plot.current?.redraw(false);
-  }, [days, hoverDay]);
+  }, [days, emphDay]);
 
   return (
     <div ref={wrap} className="profile">

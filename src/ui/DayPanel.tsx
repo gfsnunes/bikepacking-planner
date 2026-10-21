@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { describeDay } from '../core/describe';
 import { HIKE_PRESETS, SURFACES, thresholdFromRider } from '../core/hike';
 import { WAYPOINT_TYPES, type Day, type LimitReason } from '../core/types';
@@ -334,16 +334,18 @@ export function DayStrip() {
   const hasEle = useStore((s) => s.profile?.hasElevation ?? true);
   const hoverDay = useStore((s) => s.hoverDay);
   const hoverWaypoint = useStore((s) => s.hoverWaypoint);
+  const selectedDay = useStore((s) => s.selectedDay);
   const mapHoverDay = useStore((s) => (s.hoverSource ? dayAt(s.days, s.hover) : null));
   const strip = useRef<HTMLOListElement>(null);
-  const { focus, setHoverDay, setHoverWaypoint, selectWaypoint } = useStore.getState();
+  const { toggleDay, setHoverDay, setHoverWaypoint, selectWaypoint } = useStore.getState();
 
   const avgKm = stats.reduce((a, s) => a + s.distKm, 0) / Math.max(1, stats.length);
   const active = hoverDay ?? mapHoverDay;
 
-  // Bring the card or chip for what's hovered on the map / profile into view.
+  // Bring the card or chip for what's hovered on the map / profile into view, unless a day is
+  // selected: then the strip stays where it is.
   useEffect(() => {
-    if (hoverDay != null) return; // the pointer is already on the strip
+    if (hoverDay != null || selectedDay != null) return; // the pointer is already on the strip
     const el = hoverWaypoint
       ? strip.current?.querySelector(`[data-wp="${CSS.escape(hoverWaypoint)}"]`)
       : mapHoverDay != null
@@ -357,7 +359,7 @@ export function DayStrip() {
     const box = s.getBoundingClientRect();
     const dx = r.left < box.left ? r.left - box.left - 16 : r.right > box.right ? r.right - box.right + 16 : 0;
     if (dx) s.scrollBy({ left: dx, behavior: 'smooth' });
-  }, [hoverWaypoint, mapHoverDay, hoverDay]);
+  }, [hoverWaypoint, mapHoverDay, hoverDay, selectedDay]);
 
   return (
     <ol className="day-strip" ref={strip} onMouseLeave={() => setHoverDay(null)}>
@@ -366,10 +368,11 @@ export function DayStrip() {
         return (
           <li
             key={k}
-            className={`day ${k === active ? 'active' : ''}`}
-            style={{ borderTopColor: dayColor(k) }}
+            className={`day ${k === active ? 'active' : ''} ${k === selectedDay ? 'selected' : ''}`}
+            style={{ borderTopColor: dayColor(k), '--day': dayColor(k) } as CSSProperties}
+            aria-current={k === selectedDay || undefined}
             onMouseEnter={() => setHoverDay(k)}
-            onClick={() => focus(k)}
+            onClick={() => toggleDay(k)}
           >
             <div className="day-title">
               <strong style={{ color: dayColor(k) }}>Day {k + 1}</strong>

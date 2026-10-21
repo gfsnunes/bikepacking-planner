@@ -255,7 +255,7 @@ export function MapView() {
   const waypoints = useStore((s) => s.waypoints);
   const selectedWaypoint = useStore((s) => s.selectedWaypoint);
   const hover = useStore((s) => s.hover);
-  const hoverDay = useStore((s) => s.hoverDay);
+  const emphDay = useStore((s) => s.hoverDay ?? s.selectedDay);
   const hoverWaypoint = useStore((s) => s.hoverWaypoint);
   const focusDay = useStore((s) => s.focusDay);
   const focusPoint = useStore((s) => s.focusPoint);
@@ -301,7 +301,13 @@ export function MapView() {
 
     map.on('click', (e) => {
       const s = useStore.getState();
-      if (!s.addingWaypoint) return;
+      if (!s.addingWaypoint) {
+        // A click on the map (not on a waypoint) clears the selected day.
+        const layers = ['wp-icons', 'wp-clusters'].filter((l) => map.getLayer(l));
+        const onWaypoint = layers.length > 0 && map.queryRenderedFeatures(e.point, { layers }).length > 0;
+        if (!onWaypoint && s.selectedDay != null) s.clearSelectedDay();
+        return;
+      }
       s.addWaypoint({
         id: newWaypointId('u'),
         lat: e.lngLat.lat,
@@ -438,15 +444,15 @@ export function MapView() {
     });
   }, [days, points, styleVersion, ready]);
 
-  // Highlight the hovered day: thicker line, other days faded.
+  // Highlight the hovered (else the selected) day: thicker line, other days faded.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready) return;
-    const on = hoverDay != null;
-    map.setPaintProperty('route', 'line-width', on ? ['case', ['==', ['get', 'day'], hoverDay], 8, 4] : 4);
-    map.setPaintProperty('route-casing', 'line-width', on ? ['case', ['==', ['get', 'day'], hoverDay], 12, 7] : 7);
-    map.setPaintProperty('route', 'line-opacity', on ? ['case', ['==', ['get', 'day'], hoverDay], 1, 0.45] : 1);
-  }, [hoverDay, styleVersion, ready]);
+    const on = emphDay != null;
+    map.setPaintProperty('route', 'line-width', on ? ['case', ['==', ['get', 'day'], emphDay], 8, 4] : 4);
+    map.setPaintProperty('route-casing', 'line-width', on ? ['case', ['==', ['get', 'day'], emphDay], 12, 7] : 7);
+    map.setPaintProperty('route', 'line-opacity', on ? ['case', ['==', ['get', 'day'], emphDay], 1, 0.45] : 1);
+  }, [emphDay, styleVersion, ready]);
 
   // Draggable day-end markers (one per day except the last).
   useEffect(() => {

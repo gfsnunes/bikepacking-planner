@@ -41,6 +41,7 @@ interface Ui {
   selectedWaypoint: string | null;
   addingWaypoint: boolean;
   focusDay: { k: number; nonce: number } | null;
+  selectedDay: number | null; // day card clicked: stays emphasised until the map, the card or another card is clicked
   focusPoint: { lat: number; lon: number; nonce: number } | null; // map should fly here
   managerDay: { k: number; nonce: number } | null; // waypoint manager should scroll to this day
   lastDeleted: Waypoint[] | null; // for undo
@@ -78,6 +79,8 @@ interface Actions {
   selectWaypoint(id: string | null): void;
   setAddingWaypoint(on: boolean): void;
   focus(k: number): void;
+  toggleDay(k: number): void;
+  clearSelectedDay(): void;
 }
 
 export type State = Inputs & Derived & Ui & Actions;
@@ -110,6 +113,8 @@ export const useStore = create<State>()((setState, getState) => {
   const update = (patch: Partial<Inputs>, rebuildProfile = false) => {
     const next = { ...getState(), ...patch };
     setState({ ...patch, ...derive(next, getState(), rebuildProfile) });
+    const { selectedDay, days } = getState();
+    if (selectedDay != null && selectedDay >= days.length) setState({ selectedDay: null });
   };
 
   return {
@@ -132,13 +137,17 @@ export const useStore = create<State>()((setState, getState) => {
     selectedWaypoint: null,
     addingWaypoint: false,
     focusDay: null,
+    selectedDay: null,
     focusPoint: null,
     managerDay: null,
     lastDeleted: null,
     notice: null,
     libraryOpen: false,
 
-    loadTrack: (name, points, waypoints) => update({ name, points, waypoints: waypoints.map(sanitizeWaypoint), pinned: [] }, true),
+    loadTrack: (name, points, waypoints) => {
+      setState({ selectedDay: null });
+      update({ name, points, waypoints: waypoints.map(sanitizeWaypoint), pinned: [] }, true);
+    },
     replacePoints: (points) => update({ points }, true),
     setLimits: (l) => update({ limits: { ...getState().limits, ...l } }),
     setTimeModel: (t) => update({ timeModel: { ...getState().timeModel, ...t } }, true),
@@ -214,6 +223,9 @@ export const useStore = create<State>()((setState, getState) => {
     selectWaypoint: (selectedWaypoint) => setState({ selectedWaypoint }),
     setAddingWaypoint: (addingWaypoint) => setState({ addingWaypoint }),
     focus: (k) => setState({ focusDay: { k, nonce: Date.now() } }),
+    toggleDay: (k) =>
+      setState(getState().selectedDay === k ? { selectedDay: null } : { selectedDay: k, focusDay: { k, nonce: Date.now() } }),
+    clearSelectedDay: () => setState({ selectedDay: null }),
   };
 });
 

@@ -104,20 +104,30 @@ describe('splitter', () => {
     expect(dragRange(days, 1)).toEqual([days[1].start + 1, days[2].end - 1]);
   });
 
-  it('snaps back to a camp within the radius, never forward', () => {
+  it('snaps to the camp nearest the limit point, back or ahead', () => {
     const pts = track(300);
-    const wps = projectWaypoints(pts, [
-      { id: 'a', name: 'Camp A', type: 'camp', lat: pts[960].lat, lon: 10 }, // 96 km
-      { id: 'b', name: 'Camp B', type: 'camp', lat: pts[1030].lat, lon: 10 }, // 103 km, past the limit
-      { id: 'c', name: 'Shop', type: 'food', lat: pts[990].lat, lon: 10 },
-    ]);
     const p = buildProfile(pts);
-    const snap = { enabled: true, radiusKm: 5, types: ['camp' as const] };
-    const days = splitDays(p, { ...noLimits, maxKm: 100 }, [], wps, snap);
-    expect(days[0].end).toBe(960);
+    const camp = (id: string, i: number) => ({ id, name: `Camp ${id}`, type: 'camp' as const, lat: pts[i].lat, lon: 10 });
+    const limits = { ...noLimits, maxKm: 100 };
+    const snap = { enabled: true, radiusKm: 5, aheadKm: 2, types: ['camp' as const] };
+    const end0 = splitDays(p, limits, [])[0].end; // the plain limit point, about 100 km
+    // A camp 4 km back and one just past the limit: the one ahead is nearer and wins.
+    let days = splitDays(p, limits, [], projectWaypoints(pts, [camp('A', end0 - 40), camp('B', end0 + 1)]), snap);
+    expect(days[0]).toMatchObject({ end: end0 + 1, snappedTo: 'Camp B', reason: 'waypoint', limitReason: 'distance' });
+    expect(days[1].start).toBe(end0 + 1);
+    // Beyond the look-ahead (3 km past): falls back to the camp behind.
+    days = splitDays(p, limits, [], projectWaypoints(pts, [camp('A', end0 - 40), camp('C', end0 + 30)]), snap);
     expect(days[0].snappedTo).toBe('Camp A');
-    // Day 2 then starts at the camp
-    expect(days[1].start).toBe(960);
+    // Look-ahead 0 never goes over the limit.
+    days = splitDays(p, limits, [], projectWaypoints(pts, [camp('A', end0 - 40), camp('B', end0 + 1)]), { ...snap, aheadKm: 0 });
+    expect(days[0].snappedTo).toBe('Camp A');
+    // Equal distances: the one before wins.
+    days = splitDays(p, limits, [], projectWaypoints(pts, [camp('A', end0 - 5), camp('B', end0 + 5)]), snap);
+    expect(days[0].snappedTo).toBe('Camp A');
+    // Other waypoint types and camps outside both windows are ignored.
+    const shop = { id: 's', name: 'Shop', type: 'food' as const, lat: pts[end0].lat, lon: 10 };
+    days = splitDays(p, limits, [], projectWaypoints(pts, [shop, camp('D', end0 - 80)]), snap);
+    expect(days[0]).toMatchObject({ end: end0, reason: 'distance' });
   });
 });
 

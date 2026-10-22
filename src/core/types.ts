@@ -67,7 +67,8 @@ export interface TimeModel {
 
 export interface SnapSettings {
   enabled: boolean;
-  radiusKm: number;
+  radiusKm: number; // look back this far before the limit point
+  aheadKm?: number; // and this far past it (a day may run over its limit to reach a waypoint)
   types: WaypointType[];
 }
 
@@ -79,7 +80,7 @@ export interface Day {
   end: number; // track point index (inclusive)
   pinned: boolean;
   reason: EndReason;
-  limitReason?: LimitReason; // for 'waypoint': the limit the end was pulled back from
+  limitReason?: LimitReason; // for 'waypoint': the limit the end was moved from
   snappedTo?: string;
 }
 

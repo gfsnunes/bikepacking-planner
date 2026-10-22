@@ -7,7 +7,7 @@ import type { Runs } from './core/viewport';
 import type { ShareKeys } from './sync/crypto';
 import type { SyncStatus } from './sync/client';
 import { DEFAULT_TIME_MODEL, buildProfile } from './core/metrics';
-import { pinsAfterDrag, projectWaypoints, splitDays, type ProjectedWaypoint, type ProjectionCache } from './core/splitter';
+import { DEFAULT_SNAP_AHEAD_KM, pinsAfterDrag, projectWaypoints, splitDays, type ProjectedWaypoint, type ProjectionCache } from './core/splitter';
 import { dayStats } from './core/stats';
 import { carryPins, fullView, validView, viewFromRiding, viewPoints, type TrackView } from './core/trim';
 import { sanitizeWaypoint, safeType, type Day, type DayStats, type Limits, type Profile, type SnapSettings, type TimeModel, type TrackPoint, type Waypoint } from './core/types';
@@ -114,7 +114,7 @@ const DEFAULT_INPUTS: Omit<Inputs, 'name' | 'points' | 'waypoints' | 'source' | 
   timeModel: DEFAULT_TIME_MODEL,
   hike: DEFAULT_HIKE,
   resupply: DEFAULT_RESUPPLY,
-  snap: { enabled: true, radiusKm: 10, types: ['camp', 'lodging', 'town'] },
+  snap: { enabled: true, radiusKm: 10, aheadKm: DEFAULT_SNAP_AHEAD_KM, types: ['camp', 'lodging', 'town'] },
   pinned: [],
   cardRangeKm: 5,
 };

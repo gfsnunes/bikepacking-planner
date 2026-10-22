@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { describeDay } from '../core/describe';
 import { HIKE_PRESETS, SURFACES, thresholdFromRider } from '../core/hike';
+import { DEFAULT_SNAP_AHEAD_KM } from '../core/splitter';
 import { WAYPOINT_TYPES, type Day, type LimitReason } from '../core/types';
 import { useStore } from '../store';
 import { WAYPOINT_STYLE, dayColor, fmtH, fmtKm, fmtM } from './colors';
@@ -123,9 +124,18 @@ export function Settings() {
         <summary>Snap day ends to waypoints</summary>
         <label className="row">
           <input type="checkbox" checked={snap.enabled} onChange={(e) => setSnap({ enabled: e.target.checked })} />
-          Pull an automatic day end back to a waypoint
+          Move an automatic day end to a nearby waypoint
         </label>
         <NumberRow label="Look back up to" unit="km" value={snap.radiusKm} min={0} max={50} step={1} onChange={(v) => setSnap({ radiusKm: v })} />
+        <NumberRow
+          label="Look ahead up to"
+          unit="km"
+          value={snap.aheadKm ?? DEFAULT_SNAP_AHEAD_KM}
+          min={0}
+          max={10}
+          step={0.5}
+          onChange={(v) => setSnap({ aheadKm: v })}
+        />
         <div className="chips">
           {WAYPOINT_TYPES.map((t) => (
             <label key={t} className="chip">
@@ -139,7 +149,10 @@ export function Settings() {
             </label>
           ))}
         </div>
-        <p className="hint">Only waypoints within 1 km of the track count. Snapping never makes a day longer.</p>
+        <p className="hint">
+          The matching waypoint closest to where the limit falls wins, so a day can run over its limit by up to the look-ahead
+          distance. Set it to 0 to never go over. Only waypoints within 1 km of the track count.
+        </p>
       </details>
     </section>
   );
@@ -210,7 +223,7 @@ function ReasonBadge({ day, k }: { day: Day; k: number }) {
       return <span className={`badge reason-${day.reason}`}>{LIMIT_LABEL[day.reason]} limit</span>;
     case 'waypoint':
       return (
-        <span className="badge reason-waypoint" title={`${LIMIT_LABEL[day.limitReason!]} limit, pulled back to ${day.snappedTo}`}>
+        <span className="badge reason-waypoint" title={`${LIMIT_LABEL[day.limitReason!]} limit, moved to ${day.snappedTo}`}>
           {LIMIT_LABEL[day.limitReason!]} limit → {day.snappedTo}
         </span>
       );

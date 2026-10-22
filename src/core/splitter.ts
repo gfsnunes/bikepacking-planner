@@ -70,15 +70,25 @@ export function greedyEnd(p: Profile, s: number, limits: Limits): { end: number;
   return { end: Math.max(s + 1, first - 1), reason };
 }
 
-/** The latest matching waypoint between s and e, within radius (searching backwards only). */
+export const DEFAULT_SNAP_AHEAD_KM = 2;
+
+/**
+ * The matching waypoint nearest to the limit point e (by distance along the track): up to
+ * `radiusKm` before it or `aheadKm` past it. A tie goes to the one before, which keeps the day
+ * within its limit.
+ */
 function snapTarget(p: Profile, s: number, e: number, wps: ProjectedWaypoint[], snap: SnapSettings) {
-  const minDist = p.dist[e] - snap.radiusKm * 1000;
+  const at = p.dist[e];
+  const back = snap.radiusKm * 1000;
+  const ahead = (snap.aheadKm ?? DEFAULT_SNAP_AHEAD_KM) * 1000;
   let best: ProjectedWaypoint | undefined;
+  let bestGap = Infinity;
   for (const w of wps) {
-    if (w.idx <= s || w.idx > e) continue;
-    if (p.dist[w.idx] < minDist || w.offsetM > MAX_SNAP_OFFSET_M) continue;
-    if (!snap.types.includes(w.type)) continue;
-    if (!best || w.idx > best.idx) best = w;
+    if (w.idx <= s || w.offsetM > MAX_SNAP_OFFSET_M || !snap.types.includes(w.type)) continue;
+    const d = p.dist[w.idx] - at; // < 0 before the limit point, > 0 past it
+    if (d < -back || d > ahead) continue;
+    const gap = Math.abs(d) + (d > 0 ? 1e-6 : 0);
+    if (gap < bestGap) (best = w), (bestGap = gap);
   }
   return best;
 }
@@ -86,7 +96,7 @@ function snapTarget(p: Profile, s: number, e: number, wps: ProjectedWaypoint[], 
 /**
  * Split the track into days. `pinned` holds the end indices of the first days, placed by hand.
  * Those are kept; the rest of the track is split automatically, each day ending at the first
- * point where any active limit would be exceeded (optionally pulled back to a waypoint).
+ * point where any active limit would be exceeded (optionally moved to a nearby waypoint).
  */
 export function splitDays(
   p: Profile,

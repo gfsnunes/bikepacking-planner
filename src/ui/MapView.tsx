@@ -291,7 +291,7 @@ export function MapView() {
       const f = e.features?.[0];
       if (!f) return;
       const zoom = await (map.getSource('waypoints') as GeoJSONSource).getClusterExpansionZoom(f.properties.cluster_id);
-      map.easeTo({ center: (f.geometry as { coordinates: [number, number] }).coordinates, zoom });
+      if (f.geometry.type === 'Point') map.easeTo({ center: f.geometry.coordinates as [number, number], zoom });
     });
     map.on('mouseenter', 'wp-clusters', () => (map.getCanvas().style.cursor = 'pointer'));
     map.on('mouseleave', 'wp-clusters', () => (map.getCanvas().style.cursor = ''));

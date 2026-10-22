@@ -9,7 +9,7 @@ import type { SyncStatus } from './sync/client';
 import { DEFAULT_TIME_MODEL, buildProfile } from './core/metrics';
 import { DEFAULT_SNAP_AHEAD_KM, pinsAfterDrag, projectWaypoints, splitDays, type ProjectedWaypoint, type ProjectionCache } from './core/splitter';
 import { dayStats } from './core/stats';
-import { surfaceShare, viewSegs, type SurfaceData } from './core/surface';
+import { surfaceShare, validSurface, viewSegs, type SurfaceData } from './core/surface';
 import { carryPins, fullView, validView, viewFromRiding, viewPoints, type TrackView } from './core/trim';
 import { sanitizeWaypoint, safeType, type Day, type DayStats, type Limits, type Profile, type SnapSettings, type TimeModel, type TrackPoint, type Waypoint } from './core/types';
 
@@ -132,7 +132,7 @@ function derive(s: Inputs, prev?: Derived, rebuildProfile = true): Derived {
   const projected = projectWaypoints(s.points, s.waypoints, projectionCache);
   const days = splitDays(profile, s.limits, s.pinned, projected, s.snap);
   const stats = days.map((d) => dayStats(profile, d, projected, s.cardRangeKm * 1000));
-  const surfaceSegs = s.surface && s.surface.segs.length === s.source.length - 1 ? viewSegs(s.surface.segs, s.view) : null;
+  const surfaceSegs = validSurface(s.surface, s.source.length) ? viewSegs(s.surface.segs, s.view) : null;
   if (surfaceSegs?.length === s.points.length - 1) days.forEach((d, k) => (stats[k].surface = surfaceShare(surfaceSegs, profile.dist, d.start, d.end)));
   const foodPlan = planFood(profile, days, projected, s.resupply);
   const waterPlan = planWater(profile, projected, s.resupply);
@@ -357,7 +357,8 @@ async function doRestore() {
       inputs.source = inputs.points;
       inputs.view = fullView(inputs.points.length);
     }
-    if (inputs.surface && inputs.surface.segs?.length !== inputs.source.length - 1) inputs.surface = null;
+    // Lookups from older versions (Valhalla/Overpass) are dropped and looked up again from the tiles.
+    if (!validSurface(inputs.surface, inputs.source.length)) inputs.surface = null;
     inputs.waypoints = (inputs.waypoints ?? []).map(sanitizeWaypoint);
     inputs.snap.types = inputs.snap.types.map(safeType);
     useStore.setState({ ...inputs, ...derive(inputs, s, true) });

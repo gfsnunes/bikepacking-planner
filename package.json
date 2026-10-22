@@ -11,10 +11,12 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@mapbox/vector-tile": "^3.0.0",
     "idb-keyval": "^6.3.0",
     "jszip": "^3.10.2",
     "lucide": "^1.48.0",
     "maplibre-gl": "^6.11.2",
+    "pbf": "^5.1.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "uplot": "^1.6.32",

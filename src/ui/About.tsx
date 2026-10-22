@@ -30,9 +30,8 @@ export function About() {
         <h3>What other services see</h3>
         <ul>
           <li>
-            <strong>Road surfaces</strong> (only when you click “Look up” under Road surface) sends your route's coordinates to the
-            Valhalla map-matching server run by FOSSGIS e.V. (valhalla1.openstreetmap.de), and the ids of the roads it follows to
-            OpenStreetMap's Overpass API, to read their surface tags.
+            <strong>Road surfaces</strong> are read from the Streets map tiles along your route (OpenFreeMap), the same tiles the map
+            loads when you look at those areas. Your route itself isn't sent anywhere.
           </li>
           <li>
             <strong>Map tiles</strong> are loaded from the map provider you pick, which sees which areas of the map you view (like any web
@@ -63,8 +62,8 @@ export function About() {
             Overpass API live, which sends a simplified outline of your route to Overpass.
           </li>
           <li>
-            Road surfaces: map matching by Valhalla on the FOSSGIS server; surface and road tags © OpenStreetMap contributors (ODbL).
-            Wrong or missing surface? <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noreferrer">Report or fix it on OpenStreetMap</a>.
+            Road surfaces: OpenStreetMap surface tags (© OpenStreetMap contributors, ODbL) from OpenFreeMap's OpenMapTiles vector
+            tiles. Wrong or missing surface? <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noreferrer">Report or fix it on OpenStreetMap</a>.
           </li>
           <li>Icons: Lucide (ISC licence).</li>
         </ul>

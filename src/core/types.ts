@@ -85,6 +85,7 @@ export interface Day {
 }
 
 export interface DayStats {
+  surface?: { paved: number; unpaved: number; unknown: number }; // metres, once road surfaces were looked up
   distKm: number;
   gainM: number;
   lossM: number;

@@ -9,6 +9,7 @@ import type { SyncStatus } from './sync/client';
 import { DEFAULT_TIME_MODEL, buildProfile } from './core/metrics';
 import { DEFAULT_SNAP_AHEAD_KM, pinsAfterDrag, projectWaypoints, splitDays, type ProjectedWaypoint, type ProjectionCache } from './core/splitter';
 import { dayStats } from './core/stats';
+import { surfaceShare, viewSegs, type SurfaceData } from './core/surface';
 import { carryPins, fullView, validView, viewFromRiding, viewPoints, type TrackView } from './core/trim';
 import { sanitizeWaypoint, safeType, type Day, type DayStats, type Limits, type Profile, type SnapSettings, type TimeModel, type TrackPoint, type Waypoint } from './core/types';
 
@@ -25,9 +26,11 @@ interface Inputs {
   cardRangeKm: number; // day cards list waypoints within this distance of the track
   source: TrackPoint[]; // the track as loaded from the GPX; `points` is a view of it (crop / reverse)
   view: TrackView; // which stretch of `source` is in use, and its direction
+  surface: SurfaceData | null; // road surface per segment of `source` (looked up on request; local to this browser)
 }
 
 interface Derived {
+  surfaceSegs: Uint8Array | null; // surface class per segment of `points`
   profile: Profile | null;
   projected: ProjectedWaypoint[];
   days: Day[];
@@ -101,6 +104,7 @@ interface Actions {
   setShare(s: ShareState | null): void;
   setShareOpen(open: boolean): void;
   setCropOpen(open: boolean): void;
+  setSurface(d: SurfaceData | null): void;
   /** Use the stretch ra..rb of the original track, as shown in riding direction in the crop window. */
   cropTo(ra: number, rb: number): void;
   restoreFullRoute(): void;
@@ -109,7 +113,7 @@ interface Actions {
 
 export type State = Inputs & Derived & Ui & Actions;
 
-const DEFAULT_INPUTS: Omit<Inputs, 'name' | 'points' | 'waypoints' | 'source' | 'view'> = {
+const DEFAULT_INPUTS: Omit<Inputs, 'name' | 'points' | 'waypoints' | 'source' | 'view' | 'surface'> = {
   limits: { maxKm: 100, maxGainM: null, maxHours: null },
   timeModel: DEFAULT_TIME_MODEL,
   hike: DEFAULT_HIKE,
@@ -123,22 +127,26 @@ const DEFAULT_INPUTS: Omit<Inputs, 'name' | 'points' | 'waypoints' | 'source' | 
 const projectionCache: ProjectionCache = { byId: new Map() };
 
 function derive(s: Inputs, prev?: Derived, rebuildProfile = true): Derived {
-  if (!s.points.length) return { profile: null, projected: [], days: [], stats: [], foodPlan: null, waterPlan: null };
+  if (!s.points.length) return { profile: null, projected: [], days: [], stats: [], foodPlan: null, waterPlan: null, surfaceSegs: null };
   const profile = rebuildProfile || !prev?.profile ? buildProfile(s.points, { timeModel: s.timeModel, hike: s.hike }) : prev.profile;
   const projected = projectWaypoints(s.points, s.waypoints, projectionCache);
   const days = splitDays(profile, s.limits, s.pinned, projected, s.snap);
   const stats = days.map((d) => dayStats(profile, d, projected, s.cardRangeKm * 1000));
+  const surfaceSegs = s.surface && s.surface.segs.length === s.source.length - 1 ? viewSegs(s.surface.segs, s.view) : null;
+  if (surfaceSegs?.length === s.points.length - 1) days.forEach((d, k) => (stats[k].surface = surfaceShare(surfaceSegs, profile.dist, d.start, d.end)));
   const foodPlan = planFood(profile, days, projected, s.resupply);
   const waterPlan = planWater(profile, projected, s.resupply);
-  return { profile, projected, days, stats, foodPlan, waterPlan };
+  return { profile, projected, days, stats, foodPlan, waterPlan, surfaceSegs };
 }
 
 export const useStore = create<State>()((setState, getState) => {
   const update = (patch: Partial<Inputs>, rebuildProfile = false, remote = false) => {
     // A view-only shared trip: only per-viewer settings may change here.
     if (!remote && getState().share && !getState().share!.canWrite) {
-      if (!('cardRangeKm' in patch)) return;
-      patch = { cardRangeKm: patch.cardRangeKm };
+      // Per-browser data (card range, surface lookup) may still change.
+      const own = Object.fromEntries(Object.entries(patch).filter(([k]) => k === 'cardRangeKm' || k === 'surface'));
+      if (!Object.keys(own).length) return;
+      patch = own;
     }
     const next = { ...getState(), ...patch };
     setState({ ...patch, ...derive(next, getState(), rebuildProfile) });
@@ -152,6 +160,8 @@ export const useStore = create<State>()((setState, getState) => {
     waypoints: [],
     source: [],
     view: fullView(0),
+    surface: null,
+    surfaceSegs: null,
     ...DEFAULT_INPUTS,
     profile: null,
     projected: [],
@@ -180,13 +190,13 @@ export const useStore = create<State>()((setState, getState) => {
 
     loadTrack: (name, points, waypoints) => {
       setState({ selectedDay: null });
-      update({ name, points, source: points, view: fullView(points.length), waypoints: waypoints.map(sanitizeWaypoint), pinned: [] }, true);
+      update({ name, points, source: points, view: fullView(points.length), surface: null, waypoints: waypoints.map(sanitizeWaypoint), pinned: [] }, true);
     },
     replacePoints: (points) => {
       // Same points with new data (elevation lookup): carry the change into the original too.
       const { points: old, source } = getState();
       const swap = new Map(old.length === points.length ? old.map((p, i) => [p, points[i]]) : []);
-      update({ points, source: swap.size ? source.map((p) => swap.get(p) ?? p) : points, ...(swap.size ? {} : { view: fullView(points.length) }) }, true);
+      update({ points, source: swap.size ? source.map((p) => swap.get(p) ?? p) : points, ...(swap.size ? {} : { view: fullView(points.length), surface: null }) }, true);
     },
     setLimits: (l) => update({ limits: { ...getState().limits, ...l } }),
     setTimeModel: (t) => update({ timeModel: { ...getState().timeModel, ...t } }, true),
@@ -268,13 +278,14 @@ export const useStore = create<State>()((setState, getState) => {
     // A track from the shared trip becomes this browser's original (it can't be widened beyond it here).
     applyShared: (patch) =>
       update(
-        patch.points ? { ...patch, source: patch.points, view: fullView(patch.points.length) } : patch,
+        patch.points ? { ...patch, source: patch.points, view: fullView(patch.points.length), surface: null } : patch,
         'points' in patch || 'timeModel' in patch || 'hike' in patch,
         true,
       ),
     setShare: (share) => setState({ share }),
     setShareOpen: (shareOpen) => setState({ shareOpen }),
     setCropOpen: (cropOpen) => setState({ cropOpen }),
+    setSurface: (surface) => update({ surface }),
     cropTo: (ra, rb) => {
       const { points, source, view, pinned } = getState();
       const v = viewFromRiding(ra, rb, source.length, view.reversed);
@@ -340,11 +351,13 @@ async function doRestore() {
       // Trips saved before crop/reverse kept the original: their route is the original.
       source: saved.source?.length ? saved.source : saved.points,
       view: saved.view ?? fullView(saved.points.length),
+      surface: saved.surface ?? null,
     };
     if (!validView(inputs.view, inputs.source.length) || viewPoints(inputs.source, inputs.view).length !== inputs.points.length) {
       inputs.source = inputs.points;
       inputs.view = fullView(inputs.points.length);
     }
+    if (inputs.surface && inputs.surface.segs?.length !== inputs.source.length - 1) inputs.surface = null;
     inputs.waypoints = (inputs.waypoints ?? []).map(sanitizeWaypoint);
     inputs.snap.types = inputs.snap.types.map(safeType);
     useStore.setState({ ...inputs, ...derive(inputs, s, true) });
@@ -359,8 +372,8 @@ let savedVersion = 0; // last version confirmed written to IndexedDB
 function save() {
   timer = undefined;
   const v = version;
-  const { name, points, waypoints, limits, timeModel, hike, resupply, snap, pinned, cardRangeKm, source, view } = useStore.getState();
-  set(KEY, { name, points, waypoints, limits, timeModel, hike, resupply, snap, pinned, cardRangeKm, source, view })
+  const { name, points, waypoints, limits, timeModel, hike, resupply, snap, pinned, cardRangeKm, source, view, surface } = useStore.getState();
+  set(KEY, { name, points, waypoints, limits, timeModel, hike, resupply, snap, pinned, cardRangeKm, source, view, surface })
     .then(() => {
       savedVersion = Math.max(savedVersion, v);
       if (savedVersion !== version) return;
@@ -374,7 +387,7 @@ function save() {
 }
 useStore.subscribe((s, prev) => {
   if (!s.points.length) return;
-  const changed = (['name', 'points', 'waypoints', 'limits', 'timeModel', 'hike', 'resupply', 'snap', 'pinned', 'cardRangeKm', 'source', 'view'] as const).some(
+  const changed = (['name', 'points', 'waypoints', 'limits', 'timeModel', 'hike', 'resupply', 'snap', 'pinned', 'cardRangeKm', 'source', 'view', 'surface'] as const).some(
     (k) => s[k] !== prev[k],
   );
   if (!changed) return;

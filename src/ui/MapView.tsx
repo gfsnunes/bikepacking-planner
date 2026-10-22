@@ -201,7 +201,8 @@ export function MapView() {
       style: BASEMAPS[savedBasemap()].style,
       center: [16.4, 61.35],
       zoom: 5,
-      attributionControl: { compact: true },
+      // "Report a map error" link: asked for by the FOSSGIS terms (Overpass, Valhalla) and useful for wrong surfaces.
+      attributionControl: { compact: true, customAttribution: '<a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noreferrer">Report a map error</a>' },
       // North-up and flat: the map view is then exactly map.getBounds(), which the profile greying uses.
       maxPitch: 0,
       dragRotate: false,

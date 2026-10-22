@@ -379,3 +379,22 @@ dialog.crop h2, dialog.crop p { margin: 0; }
   dialog.crop { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; }
   .crop-map { flex: 1; height: auto; }
 }
+
+/* Road surface */
+.surface { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+.surface-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--border); min-width: 120px; }
+.surface-bar span { display: block; height: 100%; }
+.surface .paved { --c: #5c6f82; }
+.surface .unpaved { --c: #b07a3c; }
+.surface .unknown { --c: #b9b9b9; }
+.surface-bar .paved, .surface-bar .unpaved, .surface-bar .unknown { background: var(--c); }
+.surface-text .paved, .surface-text .unpaved { color: var(--c); font-weight: 600; }
+.surface-text .unknown { color: var(--muted); }
+.surface.compact .surface-text { font-weight: 400; }
+.surface-summary dd { display: flex; flex-direction: column; gap: 2px; white-space: normal; }
+button.small { font-size: 12px; padding: 2px 8px; }
+@media (prefers-color-scheme: dark) {
+  .surface .paved { --c: #9fb4c8; }
+  .surface .unpaved { --c: #d9a066; }
+  .surface .unknown { --c: #6b6b6b; }
+}

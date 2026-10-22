@@ -7,6 +7,7 @@ import { useStore } from '../store';
 import { WAYPOINT_STYLE, dayColor, fmtH, fmtKm, fmtM } from './colors';
 import { iconSvg } from './icons';
 import { DayResupply, ResupplySection, ResupplySummary } from './Resupply';
+import { SurfaceBar, SurfaceSummary } from './Surface';
 
 function Icon({ type, size = 12 }: { type: keyof typeof WAYPOINT_STYLE; size?: number }) {
   // Static SVG markup generated from the Lucide icon set, not user input.
@@ -308,6 +309,7 @@ export function TripSummary() {
           </div>
         )}
         <ResupplySummary />
+        <SurfaceSummary />
         <div>
           <dt>Average day</dt>
           <dd>
@@ -408,6 +410,7 @@ export function DayStrip() {
                 Hike-a-bike {fmtKm(s.hikeKm)} · {fmtH(s.hikeHours)}
               </div>
             )}
+            {s.surface && <SurfaceBar share={s.surface} />}
             <DayResupply d={d} k={k} hours={s.hours} />
             {s.waypoints.length > 0 && (
               <div className="day-wps">

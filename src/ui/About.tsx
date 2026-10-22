@@ -30,6 +30,11 @@ export function About() {
         <h3>What other services see</h3>
         <ul>
           <li>
+            <strong>Road surfaces</strong> (only when you click “Look up” under Road surface) sends your route's coordinates to the
+            Valhalla map-matching server run by FOSSGIS e.V. (valhalla1.openstreetmap.de), and the ids of the roads it follows to
+            OpenStreetMap's Overpass API, to read their surface tags.
+          </li>
+          <li>
             <strong>Map tiles</strong> are loaded from the map provider you pick, which sees which areas of the map you view (like any web
             map).
           </li>
@@ -57,8 +62,16 @@ export function About() {
             built-in library refreshed monthly from Geofabrik extracts (nothing about your route is sent). Elsewhere it searches the public
             Overpass API live, which sends a simplified outline of your route to Overpass.
           </li>
+          <li>
+            Road surfaces: map matching by Valhalla on the FOSSGIS server; surface and road tags © OpenStreetMap contributors (ODbL).
+            Wrong or missing surface? <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noreferrer">Report or fix it on OpenStreetMap</a>.
+          </li>
           <li>Icons: Lucide (ISC licence).</li>
         </ul>
+        <h3>Contact</h3>
+        <p>
+          Questions, problems or requests: <a href="mailto:guilhermefnunes@gmail.com">guilhermefnunes@gmail.com</a>.
+        </p>
         <button onClick={() => dialog.current?.close()}>Close</button>
       </dialog>
     </>
